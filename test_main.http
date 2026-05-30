@@ -1,0 +1,33 @@
+# Streaming AI Chat Platform - HTTP 测试用例
+# 在 PyCharm 中点击每个请求左侧的绿色小三角运行。
+# 运行前确保后端已启动：uvicorn app.main:app --reload
+
+### 健康检查
+GET http://127.0.0.1:8000/health
+Accept: application/json
+
+### 普通非流式聊天（对照用，前端实际不调用此接口）
+POST http://127.0.0.1:8000/api/chat
+Content-Type: application/json
+
+{
+  "message": "你好"
+}
+
+### SSE 流式聊天 - 核心接口
+# 注意：HTTP Client 显示的是原始流式输出，每行一个 data: 事件
+GET http://127.0.0.1:8000/api/chat/stream?message=%E4%BD%A0%E5%A5%BD
+Accept: text/event-stream
+
+### 新建会话
+POST http://127.0.0.1:8000/api/sessions
+Accept: application/json
+
+### 查看会话历史
+# 把 {{session_id}} 替换成上一步返回的 session_id
+GET http://127.0.0.1:8000/api/sessions/{{session_id}}
+Accept: application/json
+
+### 删除会话
+DELETE http://127.0.0.1:8000/api/sessions/{{session_id}}
+Accept: application/json

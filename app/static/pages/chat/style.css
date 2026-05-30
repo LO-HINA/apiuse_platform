@@ -1,0 +1,426 @@
+/* 全局高级深色模式变量设计 (深度还原截图风格) */
+:root {
+    --bg-main: #212121;         /* 主聊天区底色，截图中的深灰色 */
+    --bg-sidebar: #000000;      /* 侧边栏底色，截图中接近纯黑 */
+    --bg-sidebar-hover: #202123;/* 侧边栏悬停色 */
+    --bg-sidebar-active: #343541;/* 侧边栏选中色 */
+    --bg-bubble-user: #2f2f2f;  /* 用户消息气泡色 */
+    --bg-input: #2f2f2f;        /* 输入框背景色 */
+    --text-main: #ececf1;       /* 主文本色 */
+    --text-muted: #8e8ea0;      /* 次要文本色 */
+    --accent-color: #10a37f;    /* 经典 AI 翠绿主题色 */
+    --border-color: #4d4d4f;    /* 边框分割线颜色 */
+    --max-width-content: 800px; /* 黄金对话流宽度 */
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+}
+
+.app-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+/* ==========================================================================
+   1. 左侧边栏 (Sidebar) - 完全匹配截图与要求
+   ========================================================================== */
+.sidebar {
+    width: 320px; /* B 档：从 250px 放大到 280px */
+    background-color: var(--bg-sidebar);
+    font-size: 16px; /* B 档：从 14px 放大到 16px */
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px;
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+.sidebar-top {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    font-size: 16px; /* B 档：从 14px 放大到 16px */
+    font-weight: 500;
+    color: var(--text-main);
+    cursor: pointer;
+    border-radius: 8px;
+}
+.brand:hover { background-color: var(--bg-sidebar-hover); }
+.brand svg { color: var(--text-muted); }
+
+.nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.nav-item:hover { background-color: var(--bg-sidebar-hover); }
+.nav-item svg { color: var(--text-main); }
+
+/* 会话列表 */
+.history-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-right: 2px;
+    margin-top: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a3a transparent;
+}
+
+.history-list::-webkit-scrollbar { width: 4px; }
+.history-list::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 2px; }
+
+.history-section-title {
+    font-size: 13px; /* B 档：从 12px 放大到 13px */
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 10px 12px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-main);
+    transition: background-color 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-item:hover { background-color: var(--bg-sidebar-hover); }
+
+.history-item.active {
+    background-color: var(--bg-sidebar-active);
+}
+
+/* 侧边栏底部用户信息 */
+.sidebar-bottom {
+    padding-top: 10px;
+    margin-top: 8px;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.user-profile:hover {
+    background-color: var(--bg-sidebar-hover);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    background-color: #a84c59; /* 匹配截图LH头像颜色 */
+    color: #ffffff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    font-size: 12px;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.user-name {
+    font-weight: 500;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-status {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* ==========================================================================
+   右侧主内容对话区 (Main Content)
+   ========================================================================== */
+.chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-main);
+    position: relative;
+    height: 100%;
+}
+
+/* 消息流主容器 */
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 50px 32px 30px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    scroll-behavior: smooth;
+    /* 学习要点：Webkit 系（Chrome/Edge/Safari）用上面的 ::-webkit-scrollbar；
+       Firefox 不认这套，得用下面这两个标准属性。两套都写,各自的浏览器自动选生效的那一套。 */
+    scrollbar-width: thin;
+    scrollbar-color: #424242 transparent;
+}
+
+.chat-container::-webkit-scrollbar { width: 8px; }
+.chat-container::-webkit-scrollbar-track { background: transparent; }
+.chat-container::-webkit-scrollbar-thumb { background: #424242; border-radius: 4px; }
+.chat-container::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+
+/* 2. 聊天区消息气泡：整体排布 */
+.message {
+    display: flex;
+    gap: 16px;
+    max-width: var(--max-width-content);
+    margin: 0 auto;
+    width: 100%;
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 2. 聊天区消息气泡：用户消息靠右，AI 消息靠左 */
+.message.user-message {
+    flex-direction: row-reverse;
+}
+
+/* 头像设计（AI需要，用户隐藏以实现纯气泡） */
+.avatar {
+    width: 36px; /* B 档：从 30px 放大到 32px */
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.ai-message .avatar {
+    background-color: var(--accent-color);
+}
+
+.user-message .avatar {
+    display: none; 
+}
+
+/* 2. 聊天区消息气泡：统一格式 (字体/行高/最大宽度/内边距/圆角) */
+.message-content {
+    font-size: 18px;         /* B 档：从 16px 放大到 17px */
+    line-height: 1.5;
+    padding: 12px 16px;
+    border-radius: 14px;
+    max-width: 60%;
+    word-wrap: break-word;
+    color: var(--text-main);
+}
+
+/* 区分用户和 AI 的背景色 */
+.user-message .message-content {
+    background-color: var(--bg-bubble-user);
+}
+
+.ai-message .message-content {
+    background-color: transparent; /* AI 侧通常没有明显气泡背景，或者跟主背景融为一体 */
+}
+
+/* ==========================================================================
+   AI 正在生成状态提示器
+   ========================================================================== */
+.status-indicator {
+    max-width: var(--max-width-content);
+    margin: 0 auto;
+    width: 100%;
+    padding: 0 24px 8px 46px; /* 留出头像宽度 */
+    display: none; 
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.typing-loader {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.typing-loader span {
+    width: 5px;
+    height: 5px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    display: inline-block;
+    animation: sk-bouncedelay 1.4s infinite ease-in-out both;
+}
+.typing-loader span:nth-child(1) { animation-delay: -0.32s; }
+.typing-loader span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes sk-bouncedelay {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1.0); }
+}
+
+/* ==========================================================================
+   3. 底部输入区和发送按钮
+   ========================================================================== */
+.input-area {
+    padding: 12px 24px 20px 24px;
+    background-color: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: flex-end; /* 底部对齐，实现多行时向上扩展 */
+    max-width: var(--max-width-content);
+    width: 100%;
+    position: relative;
+    background-color: var(--bg-input);
+    border-radius: 18px;       /* 对话框放大后,圆角也跟着放大保持比例 */
+    min-height: 64px;          /* 放大喵：从 48px 扩到 64px,看起来更宽敞 */
+    padding: 8px 12px;         /* 内边距同步加大 */
+    transition: box-shadow 0.2s;
+}
+
+.input-wrapper:focus-within {
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+}
+
+textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    /* 学习要点：原来这里写的是 `padding: 10px 48 10px 12px`,
+       右侧的 48 漏了 px 单位,根据 CSS 规范这条 padding 整条都会被忽略。
+       右侧又没留出按钮空间,长文本会被发送按钮盖住。修正:
+         - 右侧 56px = 按钮宽 40 + 右距 8 + 留 8 缓冲
+         - 上下 12px 让文字不顶住边框
+         - 字号 17 → 18,跟消息气泡对齐,看起来更舒服 */
+    padding: 12px 56px 12px 12px;
+    resize: none;
+    font-size: 18px;
+    line-height: 1.5;
+    font-family: inherit;
+    outline: none;
+    max-height: 200px;
+}
+
+textarea::placeholder {
+    color: var(--text-muted);
+}
+
+/* 发送按钮 */
+.send-btn {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;             /* 配合 input-wrapper 的 padding 8 + 余量 */
+    width: 40px;              /* 放大喵：从 36 → 40 */
+    height: 40px;
+    background-color: #ffffff;
+    color: #000000;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
+}
+
+.send-btn:hover {
+    background-color: #e5e5e5;
+}
+
+.send-btn:active {
+    transform: scale(0.95);
+}
+
+.send-btn:disabled {
+    /* 学习要点：原来 #242424 / #555 在深色背景里几乎看不出"已禁用",
+       用更亮的灰 + 半透明,让"流式生成中不能再点"的状态肉眼可辨。 */
+    background-color: #4a4a4a;
+    color: #888888;
+    cursor: not-allowed;
+    opacity: 0.7;
+    transform: none;
+}
+
+.disclaimer {
+    font-size: 13px; /* B 档：从 12px 放大到 13px */
+    color: var(--text-muted);
+    margin-top: 12px;
+    text-align: center;
+}
+
+/* ==========================================================================
+   无障碍：尊重用户的"减少动画"系统偏好
+   学习要点：macOS / Windows 都能开"减少动效"开关,前庭功能敏感的用户开了之后
+   就不希望看到 fadeIn / typing-loader 这类动画。这里用 @media 一键全关。
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}

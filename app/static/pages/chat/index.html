@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Stream - 网页端流式对话平台</title>
+    <!-- 学习要点：浏览器默认会请求 /favicon.ico，没有就 404 一条，控制台多一行红字。
+         data: 这个空 URL 可以让浏览器"什么都不请求",日志干净。 -->
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/static/pages/chat/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 左侧边栏：历史记录与用户信息 -->
+        <aside class="sidebar">
+            <div class="sidebar-top">
+                <div class="brand">
+                    <span>AI Stream</span>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="9" y1="3" x2="9" y2="21"></line>
+                    </svg>
+                </div>
+
+                <div class="nav-menu">
+                    <div class="nav-item" id="new-chat-btn" role="button" tabindex="0" aria-label="新建聊天">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        新聊天
+                    </div>
+                    <div class="nav-item">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        搜索聊天
+                    </div>
+                    <div class="nav-item">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                        项目
+                    </div>
+                    <div class="nav-item">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        Codex
+                    </div>
+                    <div class="nav-item">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+                        更多
+                    </div>
+                </div>
+            </div>
+
+            <!-- 最近会话列表 -->
+            <div class="history-list">
+                <div class="history-section-title">最近</div>
+            </div>
+        </aside>
+
+        <!-- 主内容区：对话展示与输入 -->
+        <main class="chat-main">
+            <!-- 消息展示区 -->
+            <div class="chat-container" id="chat-container">
+                <!-- AI 初始欢迎语 -->
+                <div class="message ai-message">
+                    <div class="avatar">AI</div>
+                    <div class="message-content">有什么问题，尽管问。</div>
+                </div>
+            </div>
+
+            <!-- 状态提示区域 (AI正在生成...) -->
+            <div class="status-indicator" id="status-indicator">
+                <div class="typing-loader">
+                    <span></span><span></span><span></span>
+                </div>
+                <span>AI 正在生成...</span>
+            </div>
+
+            <!-- 底部输入区 -->
+            <footer class="input-area">
+                <div class="input-wrapper">
+                    <textarea id="message-input" placeholder="有问题，尽管问" rows="1" aria-label="消息输入框"></textarea>
+                    <button id="send-btn" class="send-btn" type="button" title="发送消息" aria-label="发送消息">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                            <polyline points="5 12 12 5 19 12"></polyline>
+                        </svg>
+                    </button>
+                </div>
+                <div class="disclaimer">AI 可能会犯错，请注意核实信息。</div>
+            </footer>
+        </main>
+    </div>
+
+    <script src="/static/pages/chat/script.js"></script>
+</body>
+</html>
