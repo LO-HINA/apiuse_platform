@@ -36,6 +36,7 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+node_modules/
 
 # ===== 持久化数据(含敏感字段) =====
 # users.json: 含密码哈希
