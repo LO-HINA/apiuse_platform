@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.modules.ai_providers.service import dispatch_chat, dispatch_chat_stream
 from app.modules.messages import crud as messages_crud
 from app.modules.messages.schemas import Message, Role
-from app.modules.sessions import crud as sessions_crud
+from app.modules.sessions import service as sessions_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +36,10 @@ async def _resolve_or_create_session(
     *, session_id: UUID | None, user_id: str | None,
 ) -> UUID:
     """None → 新建。给了找不到 / 不归你 → LookupError(路由翻 404 防枚举)。"""
-    if session_id is None:
-        rec = await sessions_crud.create(user_id=user_id)
-        return UUID(rec.id)
-
-    sid = str(session_id)
-    rec = await sessions_crud.get(sid)
-    if rec is None or rec.user_id != user_id:
-        raise LookupError("session not found")
-    return session_id
+    return await sessions_service.resolve_or_create_owned(
+        session_id=session_id,
+        user_id=user_id,
+    )
 
 
 # ----------------------------------------------------------------------
@@ -67,8 +62,9 @@ async def handle_chat(
     reply = await dispatch_chat(user_message, history=history)
 
     await messages_crud.add(session_id=sid_str, role=Role.ASSISTANT.value, content=reply)
-    await sessions_crud.touch(sid_str)
+    await sessions_service.touch(sid)
     await messages_crud.trim_history(sid_str, settings.SESSION_MAX_MESSAGES)
+    await sessions_service.cleanup_inactive_message_bodies()
 
     logger.info(
         "handle_chat done: session_id=%s history=%d reply_len=%d",
@@ -93,7 +89,7 @@ async def prepare_stream(
 
     history = await _take_history(sid_str)
     await messages_crud.add(session_id=sid_str, role=Role.USER.value, content=user_message)
-    await sessions_crud.touch(sid_str)
+    await sessions_service.touch(sid)
     return sid, history
 
 
@@ -107,8 +103,9 @@ async def persist_assistant(*, session_id: UUID, content: str) -> int | None:
     msg = await messages_crud.add(
         session_id=sid_str, role=Role.ASSISTANT.value, content=content,
     )
-    await sessions_crud.touch(sid_str)
+    await sessions_service.touch(session_id)
     await messages_crud.trim_history(sid_str, settings.SESSION_MAX_MESSAGES)
+    await sessions_service.cleanup_inactive_message_bodies()
     return msg.id
 
 

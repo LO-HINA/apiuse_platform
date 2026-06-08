@@ -26,3 +26,14 @@ async def touch(session_id: str) -> None:
 
 async def list_by_user(user_id: str, *, limit: int = 50) -> list[SessionRecord]:
     return await session_repo.list_by_user(user_id, limit=limit)
+
+
+async def cleanup_candidate_ids(
+    *,
+    max_active_sessions: int,
+    idle_ttl_minutes: int,
+) -> list[str]:
+    return await session_repo.cleanup_candidate_ids(
+        max_active_sessions=max_active_sessions,
+        idle_ttl_minutes=idle_ttl_minutes,
+    )

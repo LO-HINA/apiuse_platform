@@ -60,6 +60,7 @@ Prefer operational facts that help debug a failed request without leaking conten
 - Stream lifecycle: session ID, user ID when safe, message length, history count, reply length, disconnect/cancel status.
 - Persistence lifecycle: JSON load count, missing JSON file fallback, write failures if they occur.
 - Provider/channel lifecycle in future milestones: selected channel ID/name, provider type, latency, retry/failover outcome, blacklist duration.
+- M2 channel lifecycle: selected channel safe label, success/failure count updates, safe failure reason (`http_500`, `http_429`, `ConnectError`, etc.), and whether the failure is retryable.
 
 Use structured message arguments instead of f-strings so formatting is deferred:
 
@@ -78,8 +79,9 @@ Never log:
 - Full upstream request/response bodies if they may contain prompts, secrets, or provider credentials.
 - Raw Authorization headers.
 - Browser-visible unmasked key material.
+- Raw Pydantic validation error strings for channel config when those errors may include `api_key` input values.
 
-When future channel logs need to identify a key, log a safe channel ID/name and a masked suffix only.
+When channel logs need to identify a key, log a safe channel ID/name. Do not log the key itself; only add masked suffixes if a future admin workflow explicitly needs them.
 
 ---
 
@@ -89,4 +91,5 @@ When future channel logs need to identify a key, log a safe channel ID/name and 
 - Creating per-request handlers or duplicate handlers.
 - Logging full chat message content when length or count is enough.
 - Logging expected validation failures with traceback.
+- Logging `channels.json` contents, provider request payloads, or upstream error bodies during failover.
 - Losing `request_id` by bypassing the configured root logging pipeline.

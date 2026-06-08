@@ -133,32 +133,27 @@ api/deps            → modules/auth (拿 user)
 
 ## 3. 当前代码状态
 
-### 3.1 保留(已实现)
+### 3.1 已实现
 
-- `app/main.py` FastAPI 入口、lifespan 管 httpx 单例 + `users.json` 启动加载
-- `app/api/chat.py` SSE 协议(首帧 session_id / token 事件 / error 事件 / `[DONE]`)
-- `app/api/auth.py` + `app/api/deps.py` JWT 认证 + Argon2 + `get_current_user` / `get_optional_current_user` / `get_admin_user`
-- `app/core/security.py` JWT 编解码 + 密码哈希
-- `app/core/config.py` `pydantic-settings` 读 .env
-- `app/services/ai_service.py` `dispatch_chat` / `dispatch_chat_stream` 的 fake/real 双实现
-- `app/storage/repos.py` `SessionRepo` / `MessageRepo` / `UserRepo`(json 持久化)
+- `app/main.py` FastAPI 入口、lifespan 管 httpx 单例,启动加载 `users.json` 和 M2 `channels.json`
+- `app/api/deps.py` 跨领域依赖:`get_current_user` / `get_optional_current_user` / `get_admin_user`
+- `app/modules/auth/` 注册 / 登录 / me,router 只管 HTTP,service 负责业务编排
+- `app/modules/sessions/` 会话 CRUD + `sessions.service` 所有权判断 + M2 LRU/TTL 消息体清理
+- `app/modules/messages/` 消息 CRUD + 单会话滑窗 trim
+- `app/modules/chat/` SSE 协议(首帧 session_id / token 事件 / 安全 error 事件 / `[DONE]`)
+- `app/modules/ai_providers/` fake + OpenAI-compatible provider;真实模式走 M2 channel 池
+- `app/modules/channels/` `data/channels.json` 加载、加权随机、失败计数、临时黑名单
+- `app/core/security.py` JWT 编解码 + Argon2 密码哈希
+- `app/core/config.py` `pydantic-settings` 读 .env,包含 M2 channel / LRU 参数
+- `app/storage/repos.py` `SessionRepo` / `MessageRepo` / `UserRepo`
 - `app/static/` 原生 HTML/JS + EventSource 聊天页
 
-### 3.2 当前结构 → 目标结构(M1.5 重组映射)
+### 3.2 M2 当前边界
 
-| 现在 | 目标 |
-|---|---|
-| `app/api/auth.py` | `app/modules/auth/router.py` |
-| `app/api/chat.py`(混了 sessions / chat 两类路由) | 拆分到 `modules/sessions/router.py` + `modules/chat/router.py` |
-| `app/services/chat_service.py` | `modules/chat/service.py` |
-| `app/services/ai_service.py` | `modules/ai_providers/service.py` + `fake.py` + `openai_compat.py` |
-| `app/crud/{session,message,user}.py` | `modules/{sessions,messages,auth}/crud.py` |
-| `app/schemas/{auth,chat}.py` | 各模块自带 `schemas.py` |
-| `app/storage/repos.py` | 保留(原子存储能力,不属任何领域) |
-
-### 3.3 还没实现
-
-见 § 8 里程碑。
+- 当前没有 `channels.router.py`;M3 才做管理 API + 后台 UI。
+- 当前没有 `POST /v1/chat/completions`;M4 才做 OpenAI SDK 可直连代理路由。
+- 当前只支持 `provider_type="openai_compat"`;New-API / Anthropic / Gemini 等属于后续 Provider 适配。
+- `data/channels.json` 支持直接数组或 `{"channels": [...]}` 两种本地写法,但真实 key 只留本机。
 
 ---
 
@@ -209,10 +204,10 @@ api/deps            → modules/auth (拿 user)
 
 - **选 channel**:从 `enabled=true` 且 `blacklisted_until <= now` 的池子里**加权随机**
 - **失败处理**:
-  - 5xx / 超时 / 连接错误 → 立即拉黑 `CHANNEL_BLACKLIST_SECONDS` 秒(默认 30),从下一个 channel 重试
+  - 5xx / 429 / 超时 / 连接错误 → 立即拉黑 `CHANNEL_BLACKLIST_SECONDS` 秒(默认 30),从下一个 channel 重试
   - 4xx(401 / 403 / 404)→ 不拉黑(API Key 错误需要人工修),记一次失败计数
 - **恢复**:黑名单到期自动恢复,不做主动健康检查(被动健康检查 M5 之后再加)
-- **全军覆没**:所有 channel 都失败 → 返回 503,响应体附带当前黑名单状态供前端展示
+- **全军覆没**:所有 channel 都失败 → 返回安全错误文案;SSE 内只给浏览器安全 error 事件,不暴露 API Key、Authorization、原始上游响应体
 
 ---
 
@@ -252,7 +247,7 @@ Explain → Plan → Wait Confirm → Build → Build Summary
 |---|---|---|
 | **M1** ✅ | 删除 DB / 摘要 / 调用日志,CRUD 改内存版 | 启动不再依赖 MySQL;SSE 聊天 + 登录注册不回归 |
 | **M1.5** | 目录按 `modules/<领域>/` 重组 | 现有功能不回归;依赖单向;`api/` 下只剩 `deps.py` |
-| **M2** | Channel + `channels.json` + 加权随机 + failover 黑名单 + LRU/TTL 内存控制 | 配 2+ channel 流量分发;故意写错 key 自动切;空闲会话被清 |
+| **M2** ✅ | Channel + `channels.json` + 加权随机 + failover 黑名单 + LRU/TTL 内存控制 | 后端核心已落地;M3 再做管理 UI |
 | **M3** | 管理 API + 管理后台 UI(`/static/pages/admin/`) | 管理员可视化增删改 channel + 看统计面板 |
 | **M4** | OpenAI 兼容代理路由 `POST /v1/chat/completions` + Provider 抽象正式落地(`openai_compat.py` / `newapi.py`) | OpenAI SDK 能直接打通 |
 | **M5** | 插件系统(plugins 模块 + builtin/echo/calculator/time)+ 前端插件管理页 | 聊天里能触发 echo 插件 |

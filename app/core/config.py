@@ -47,6 +47,14 @@ class Settings(BaseSettings):
 
     # 单会话保留的最大消息条数,内存版用它兜底,防止历史无限增长
     SESSION_MAX_MESSAGES: int = 100
+    # M2 总量保护:单个会话内 trim 只能限制"一个桶"的大小,
+    # 长时间运行时还需要限制活跃会话数量和闲置会话消息体。
+    MAX_ACTIVE_SESSIONS: int = 1000
+    SESSION_IDLE_TTL_MINUTES: int = 60
+
+    # M2 channel failover:上游 5xx / 429 / timeout / 连接错误会短暂拉黑,
+    # 让下一次调度优先尝试别的 key,避免一直打同一个坏上游。
+    CHANNEL_BLACKLIST_SECONDS: int = 30
 
     # CORS:allow_origins=["*"] 不能和 allow_credentials=True 共存,默认列具体域名
     CORS_ALLOW_ORIGINS: list[str] = [

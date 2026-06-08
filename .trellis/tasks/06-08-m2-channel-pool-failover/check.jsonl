@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Check the implementation against core backend constraints."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify router/service/CRUD boundaries and dependency direction."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify JSON persistence and in-memory cleanup semantics."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify safe HTTP/SSE errors and failover error translation."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify logs do not expose API keys, tokens, or raw sensitive payloads."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify roadmap scope, small changes, and focused validation."}

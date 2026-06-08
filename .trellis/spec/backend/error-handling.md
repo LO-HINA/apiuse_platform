@@ -79,10 +79,17 @@ SSE routes have protocol-specific behavior:
 
 - The first event should expose `session_id` because `EventSource` cannot read custom response headers.
 - Tokens must be encoded as JSON event payloads so embedded newlines do not break the SSE frame format.
-- Stream errors should be sent as a JSON error event, for example `StreamErrorEvent(error=str(exc))`.
+- Stream errors should be sent as a JSON error event with a user-safe message. Prefer `safe_message` from a known service exception such as `ChannelPoolError`; otherwise use a generic message. Do not send `str(exc)` directly to the browser.
 - `[DONE]` should be emitted when the stream exits normally or after a handled stream error, unless the client disconnected.
 
 Keep SSE protocol framing in the router/stream boundary. Business decisions such as preparing history or persisting assistant messages belong in `chat.service`.
+
+M2 channel/provider failures:
+
+- 5xx, 429, timeouts, connection errors, and invalid upstream JSON are retryable channel failures.
+- 401, 403, and 404 are counted as failures but are not blacklisted automatically.
+- When the channel pool is exhausted, return a safe error message. Never expose upstream URLs with embedded credentials, raw upstream response bodies, Authorization headers, or API keys.
+- Streaming failover may retry only before any token has been emitted. Once tokens have reached the browser, a mid-stream upstream failure should become a safe stream error instead of switching channels and duplicating output.
 
 ---
 
@@ -90,6 +97,7 @@ Keep SSE protocol framing in the router/stream boundary. Business decisions such
 
 - Returning ad hoc error dictionaries from routers instead of raising `HTTPException` or using global handlers.
 - Leaking upstream provider errors, API keys, raw response bodies, or internal stack details to clients.
+- Using `str(exc)` for SSE/provider errors that may contain upstream details.
 - Swallowing `asyncio.CancelledError` in a stream generator.
 - Logging expected 404/validation errors as server errors.
 - Putting HTTP status-code decisions deep inside storage repositories.

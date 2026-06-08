@@ -15,7 +15,7 @@ import json
 import logging
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -41,6 +41,9 @@ class SessionRecord:
     title: Optional[str] = None
     created_at: datetime = field(default_factory=_now)
     updated_at: datetime = field(default_factory=_now)
+    # M2 LRU/TTL 使用 last_accessed_at 判断"这个会话的消息体还能不能留在内存"。
+    # updated_at 代表元信息更新时间,last_accessed_at 代表用户最近真正访问/对话时间。
+    last_accessed_at: datetime = field(default_factory=_now)
 
 
 @dataclass
@@ -90,9 +93,12 @@ class SessionRepo:
             return self._sessions.pop(session_id, None) is not None
 
     async def touch(self, session_id: str) -> None:
-        rec = self._sessions.get(session_id)
-        if rec is not None:
-            rec.updated_at = _now()
+        async with self._lock:
+            rec = self._sessions.get(session_id)
+            if rec is not None:
+                now = _now()
+                rec.updated_at = now
+                rec.last_accessed_at = now
 
     async def list_by_user(self, user_id: str, *, limit: int = 50) -> list[SessionRecord]:
         if not user_id:
@@ -100,6 +106,42 @@ class SessionRepo:
         rows = [s for s in self._sessions.values() if s.user_id == user_id]
         rows.sort(key=lambda s: s.updated_at, reverse=True)
         return rows[:limit]
+
+    async def cleanup_candidate_ids(
+        self,
+        *,
+        max_active_sessions: int,
+        idle_ttl_minutes: int,
+    ) -> list[str]:
+        """返回应清空消息体的 session_id,但不删除 session 元信息。
+
+        两类会被选中:
+        1. 闲置时间超过 TTL 的会话。
+        2. 总会话数超过上限时,last_accessed_at 最老的一批会话。
+
+        这里故意只返回 id,不碰 MessageRepo。storage 层保持原子仓库职责,
+        真正"清消息体"由 sessions.service 组合 SessionRepo + MessageRepo 完成。
+        """
+        rows = list(self._sessions.values())
+        candidate_ids: list[str] = []
+        seen: set[str] = set()
+
+        if idle_ttl_minutes > 0:
+            idle_before = _now() - timedelta(minutes=idle_ttl_minutes)
+            for rec in rows:
+                if rec.last_accessed_at < idle_before:
+                    candidate_ids.append(rec.id)
+                    seen.add(rec.id)
+
+        if max_active_sessions > 0 and len(rows) > max_active_sessions:
+            excess_count = len(rows) - max_active_sessions
+            rows.sort(key=lambda s: s.last_accessed_at)
+            for rec in rows[:excess_count]:
+                if rec.id not in seen:
+                    candidate_ids.append(rec.id)
+                    seen.add(rec.id)
+
+        return candidate_ids
 
 
 class MessageRepo:

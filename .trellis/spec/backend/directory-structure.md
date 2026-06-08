@@ -44,6 +44,11 @@ app/
 │   ├── messages/
 │   │   ├── crud.py
 │   │   └── schemas.py
+│   ├── channels/
+│   │   ├── crud.py
+│   │   ├── scheduler.py
+│   │   ├── schemas.py
+│   │   └── service.py
 │   └── ai_providers/
 │       ├── fake.py
 │       ├── openai_compat.py
@@ -58,7 +63,9 @@ app/
             └── style.css
 ```
 
-Some future modules are present only as empty package stubs: `channels`, `plugins`, `context`, `memory`, and `model_logs`. Add real routers, services, CRUD wrappers, and schemas under `app/modules/<domain>/` only when a milestone actually requires them.
+Some future modules are present only as empty package stubs: `plugins`, `context`, `memory`, and `model_logs`. Add real routers, services, CRUD wrappers, and schemas under `app/modules/<domain>/` only when a milestone actually requires them.
+
+`channels` is an active M2 backend module. It intentionally has no `router.py` yet because M3 owns admin APIs and UI. Channel configuration is loaded from `data/channels.json` through `channels.crud`, selected through `channels.scheduler`, and exposed to providers through `channels.service`.
 
 ---
 
@@ -71,6 +78,7 @@ Some future modules are present only as empty package stubs: `channels`, `plugin
 - `app/modules/<domain>/service.py`: business orchestration for a domain use case. Services may call other modules only through their public service functions unless the project already uses a narrower CRUD wrapper for that domain.
 - `app/modules/<domain>/crud.py`: module-local data access wrapper over `app/storage` primitives.
 - `app/modules/<domain>/schemas.py`: Pydantic request/response/event schemas owned by the module.
+- `app/modules/channels/scheduler.py`: M2 channel selection only. Keep filtering and weighted random selection here; keep HTTP/provider failure handling in provider/service code.
 - `app/storage/`: shared atomic repository primitives that are not owned by a single domain.
 - `app/static/`: native HTML/JS/CSS test UI. Do not introduce React/Vue for current milestones.
 
@@ -83,7 +91,6 @@ Allowed directions:
 ```text
 modules/*             -> storage / core
 modules/chat          -> modules/sessions, modules/messages, modules/ai_providers, modules/context
-modules/channels      -> modules/ai_providers
 modules/ai_providers  -> modules/channels when scheduling channels
 api/deps              -> modules/auth
 ```
@@ -92,6 +99,7 @@ Rules:
 
 - Cross-module calls should go through `service.py` functions.
 - Do not import another module's `crud.py`, `models.py`, or private helpers from a router or unrelated service unless the existing module has no service boundary yet and the dependency is explicitly local and narrow.
+- `ai_providers` may call `channels.service` to select and update channel runtime state. Do not make `channels` call `ai_providers`; provider-specific request parsing belongs in `ai_providers`.
 - Do not make `storage/` depend on `modules/`.
 - Do not make `core/` depend on `modules/`, except for narrowly justified app assembly in `main.py`.
 - Keep `router.py` thin. In `app/modules/chat/router.py`, the route builds SSE frames and delegates stream preparation/persistence to `chat.service`.
@@ -115,6 +123,8 @@ Rules:
 - `app/main.py` shows app assembly, `setup_logging()`, `RequestIDMiddleware`, `register_exception_handlers(app)`, router registration, and shared `httpx.AsyncClient` lifecycle.
 - `app/modules/chat/router.py` shows a thin route/SSE boundary. It catches `LookupError` from the service and translates it to 404.
 - `app/modules/chat/service.py` shows business orchestration over sessions, messages, and AI provider dispatch.
+- `app/modules/channels/service.py` is the public boundary for M2 channel pool operations.
+- `app/modules/channels/scheduler.py` is the scheduler algorithm boundary for enabled/blacklisted filtering and weighted random choice.
 - `app/storage/repos.py` shows shared repository primitives and module-level singleton repos.
 
 ---
@@ -123,6 +133,7 @@ Rules:
 
 - Putting business orchestration directly in `router.py` instead of `service.py`.
 - Importing another domain's `crud.py` from a router or unrelated module.
+- Adding a channel router before M3 instead of keeping M2 channel configuration local to `data/channels.json`.
 - Adding a database or ORM because it is familiar, even though the current product phase intentionally uses memory plus JSON.
 - Placing domain-specific logic in `core/` or `storage/`.
 - Creating a new abstraction before there are real repeated call sites.

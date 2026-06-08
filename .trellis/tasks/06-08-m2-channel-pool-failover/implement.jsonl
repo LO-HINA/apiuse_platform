@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend entry point for required project constraints and linked implementation guidelines."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "M2 touches module boundaries, routers, services, CRUD wrappers, and provider integration."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Channel storage and session cleanup must stay within the current memory plus JSON model."}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Failover and SSE stream errors must use safe, consistent error behavior."}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Channel/provider logs must be useful without leaking secrets or prompt bodies."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Implementation must preserve roadmap boundaries and avoid premature frameworks."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "M2 spans config, storage, channels, providers, chat, and session cleanup."}

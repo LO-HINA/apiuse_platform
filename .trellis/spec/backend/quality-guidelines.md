@@ -21,6 +21,8 @@ The backend should remain easy to reason about: FastAPI boundary, service orches
 - Register cross-cutting behavior in `app/main.py`: middleware, exception handlers, routers, static files, and lifespan resources.
 - Use `logging.getLogger(__name__)` and rely on `setup_logging()` for formatting and request IDs.
 - Preserve one-way dependencies and module ownership.
+- Keep channel scheduling small and explicit: filter usable channels, pick by weight, record success/failure, and do not add a database or background worker for M2.
+- Keep SSE stream errors safe: browser-visible errors must be user-safe and must not be raw exception strings.
 - Prefer minimal changes over broad refactors.
 
 ---
@@ -61,7 +63,9 @@ Reviewers should check:
 - Does the change avoid premature databases, frameworks, and observability stacks?
 - Are errors returned through the unified error response shape?
 - Are SSE frames valid JSON payloads and is `[DONE]` handled correctly?
+- Does streaming failover avoid switching channels after tokens have already been emitted?
 - Are logs useful without exposing secrets or full prompt/provider payloads?
+- Are channel failure reasons safe enums rather than raw provider responses?
 - Are in-memory and JSON persistence semantics documented and respected?
 - Is the change small enough for the task, without unrelated cleanup?
 
@@ -71,6 +75,8 @@ Reviewers should check:
 
 - `app/modules/chat/router.py` is a good router example: it handles query parameters, HTTP 404 translation, SSE frames, disconnects, and stream response headers.
 - `app/modules/chat/service.py` is a good service example: it resolves sessions, manages message persistence, calls provider dispatch, touches sessions, and trims history.
+- `app/modules/channels/scheduler.py` is a good algorithm boundary example: pure filtering and weighted choice without provider or HTTP concerns.
+- `app/modules/ai_providers/openai_compat.py` is the M2 provider/failover boundary: it classifies upstream failures and updates channel state through `channels.service`.
 - `app/core/exceptions.py` is a good cross-cutting example: it centralizes response shape and logging behavior for errors.
 - `app/core/logging.py` is a good infrastructure example: it centralizes formatters, request ID injection, and uvicorn logger normalization.
 

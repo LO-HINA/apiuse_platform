@@ -6,13 +6,13 @@ OpenAI 兼容协议的简化号池中转平台,用于测试和验证多上游 AP
 
 ## 当前进度
 
-**M1.5 已完成(2026-05-29)**:目录按 `modules/<领域>/` 重组,依赖单向,功能与 M1 对齐。
+**M2 后端核心已进入(2026-06-08)**:在 M1.5 领域目录基础上,补齐 `channels.json` 号池、加权随机、failover 黑名单和会话 LRU/TTL 内存控制。M3 管理后台尚未开始。
 
 | 里程碑 | 状态 | 内容 |
 |---|---|---|
 | M1 | 完成 | 删除 DB / 摘要 / 调用日志,CRUD 改内存 + json |
 | **M1.5** | **完成** | 目录按领域重组,`api/` 下只剩 `deps.py` |
-| M2 | 下一步 | Channel 号池 + 加权随机 + failover + LRU/TTL |
+| **M2** | **后端核心已落地** | Channel 号池 + 加权随机 + failover + LRU/TTL |
 | M3 | 未开始 | 管理 API + 后台 UI |
 | M4 | 未开始 | OpenAI 兼容代理路由 `POST /v1/chat/completions` |
 | M5 | 未开始 | 插件系统(echo / calculator / time) |
@@ -26,8 +26,10 @@ OpenAI 兼容协议的简化号池中转平台,用于测试和验证多上游 AP
 - FastAPI 入口 + lifespan(httpx 单例 + `users.json` 启动加载)
 - JWT 认证(Argon2 + `get_current_user` / `get_optional_current_user` / `get_admin_user`)
 - 会话 CRUD + 消息存取 + 滑窗 trim(`SESSION_MAX_MESSAGES`)
+- M2 Channel 号池(`data/channels.json`) + 加权随机 + failover 黑名单
+- M2 总会话 LRU/TTL:清空闲置/过量会话的消息体,保留 session 元信息
 - SSE 流式聊天(首帧 session_id / token 事件 / error 事件 / `[DONE]`)
-- AI Provider 抽象骨架(fake + openai_compat)
+- AI Provider 抽象(fake + openai_compat,真实模式走 channel 池)
 - 全局异常处理 + RequestID 中间件 + 结构化日志
 - 原生 HTML/JS 前端 + EventSource 接收流式 token
 
@@ -63,7 +65,7 @@ apiuse_platform/
 │   │   ├── messages/                 # 消息存取 + 滑窗 trim ✅
 │   │   ├── chat/                     # SSE 编排 ✅
 │   │   ├── ai_providers/             # Provider 抽象(fake + openai_compat)✅
-│   │   ├── channels/                 # 号池(M2,目录已占位)
+│   │   ├── channels/                 # 号池 JSON + 调度 + 黑名单 ✅
 │   │   ├── plugins/                  # 插件系统(M5,目录已占位)
 │   │   ├── context/                  # 上下文构造(M6)
 │   │   ├── memory/                   # 长期记忆(M6)
@@ -72,7 +74,8 @@ apiuse_platform/
 │       └── pages/
 │           └── chat/                 # 聊天测试页(index.html / script.js / style.css)
 ├── data/                             # 持久化目录(.gitignore)
-│   └── users.json                    # 用户表
+│   ├── users.json                    # 用户表
+│   └── channels.json                 # 号池配置(本机敏感文件,不提交)
 ├── .env.example
 ├── CLAUDE.md                         # 项目协作规范 + 里程碑
 ├── README.md
@@ -84,8 +87,7 @@ apiuse_platform/
 ```
 modules/*           → storage / core
 modules/chat        → modules/sessions, modules/messages, modules/ai_providers
-modules/channels    → modules/ai_providers           (M2 起)
-modules/ai_providers → modules/channels              (调度时拿 channel,M2 起)
+modules/ai_providers → modules/channels              (真实上游调度时拿 channel,M2 起)
 api/deps            → modules/auth
 ```
 
@@ -121,7 +123,34 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 把输出粘到 `JWT_SECRET=...`。
 
-`USE_FAKE_AI=true` 时聊天走本地模拟,无需上游;切 `false` 才需要真 `AI_BASE_URL` / `AI_API_KEY`。
+`USE_FAKE_AI=true` 时聊天走本地模拟,无需上游。切 `false` 时走 M2 channel 池,需要创建 `data/channels.json`:
+
+```json
+[
+  {
+    "id": "openai-main",
+    "name": "OpenAI Main",
+    "provider_type": "openai_compat",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-请替换成本机真实key",
+    "models": ["gpt-4o-mini"],
+    "weight": 10,
+    "enabled": true
+  },
+  {
+    "id": "backup-proxy",
+    "name": "Backup Proxy",
+    "provider_type": "openai_compat",
+    "base_url": "https://your-proxy.example.com/v1",
+    "api_key": "sk-请替换成本机真实key",
+    "models": ["gpt-4o-mini"],
+    "weight": 3,
+    "enabled": true
+  }
+]
+```
+
+`data/` 已被 `.gitignore` 忽略,不要提交真实 API Key。`AI_BASE_URL` / `AI_API_KEY` 只保留为旧配置占位,M2 真实调用不再依赖单一上游。
 
 ### 4. 启动服务
 
@@ -184,8 +213,8 @@ data: [DONE]
 |---|---|---|
 | User | `data/users.json` | 保留 |
 | Channel(M2) | `data/channels.json` | 保留 |
-| Session | 仅内存 | 清空 |
-| Message | 仅内存 | 清空 |
+| Session | 仅内存 | 重启清空 |
+| Message | 仅内存 | 重启清空;运行期受滑窗 + LRU/TTL 控制 |
 
 切 DB 触发条件、内存压力控制(滑窗 + LRU + TTL)详见 `CLAUDE.md` § 4。
 
@@ -193,7 +222,7 @@ data: [DONE]
 
 - `.env` / `data/` 不进 git(含 API Key 和密码哈希)
 - `JWT_SECRET` 启动期校验长度 ≥ 32,空值或过短直接拒启动
-- 上游 API Key 不向前端透出,响应里 mask 成 `sk-***xxxx`
+- 上游 API Key 不向前端透出,日志只记录 channel id/name;后续管理接口也必须 mask
 - 浏览器前端不直接调上游模型,所有调用走后端代理
 - 管理类 API 由 `get_admin_user` 守住(基于 `role=admin`)
 

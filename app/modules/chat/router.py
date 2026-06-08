@@ -26,6 +26,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
+def _safe_stream_error(exc: Exception) -> str:
+    """把流内异常转成浏览器可见的安全文本。
+
+    provider/channel 层会给安全异常挂 safe_message;其他异常只返回通用提示。
+    原始异常仍由 logger.exception 记录在服务端,避免把上游 URL、响应体、
+    Authorization 相关信息或内部类型名直接发给浏览器。
+    """
+    safe_message = getattr(exc, "safe_message", None)
+    if isinstance(safe_message, str) and safe_message:
+        return safe_message
+    return "流式响应失败,请稍后重试"
+
+
 @router.get("/chat/stream")
 async def chat_stream(
     request: Request,
@@ -106,7 +119,7 @@ async def chat_stream(
 
         except Exception as exc:  # noqa: BLE001 —— 流内任何异常都要先发给前端
             logger.exception("stream chat failed: session_id=%s", current_session_id)
-            error_payload = StreamErrorEvent(error=str(exc)).model_dump_json()
+            error_payload = StreamErrorEvent(error=_safe_stream_error(exc)).model_dump_json()
             yield f"data: {error_payload}\n\n"
 
         finally:

@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn.disabled = true;
 
         eventSource.onmessage = (event) => {
-            // 后端约定（见 app/api/chat.py 的 SSE 协议注释）：
+            // 后端约定（见 app/modules/chat/router.py 的 SSE 协议注释）：
             //   data: {"token": "..."}    — 单段 token
             //   data: {"error": "..."}    — 流内错误事件
             //   data: [DONE]              — 结束标志

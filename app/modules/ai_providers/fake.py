@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 _FAKE_REPLY = (
     "[FAKE 模式] 当前未连接真实模型。"
-    "在 .env 里设 USE_FAKE_AI=false 并配好 AI_BASE_URL / AI_API_KEY 即可切换。"
+    "在 .env 里设 USE_FAKE_AI=false,并在 data/channels.json 配好 channel 即可切换。"
 )
 
 

@@ -17,6 +17,7 @@ from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware
 from app.modules.ai_providers.service import set_http_client
 from app.modules.auth.router import router as auth_router
+from app.modules.channels.service import load_channels
 from app.modules.chat.router import router as chat_router
 from app.modules.chat.schemas import HealthResponse
 from app.modules.sessions.router import router as sessions_router
@@ -44,6 +45,9 @@ async def lifespan(app: FastAPI):
 
     # users.json 同步加载到内存
     user_repo.load()
+    # M2 channel 池同样在启动期加载。缺少 channels.json 不阻塞启动,
+    # 只有 USE_FAKE_AI=false 且真实调用进来时才会返回"无可用 channel"。
+    load_channels()
 
     # 全应用共享一个 httpx.AsyncClient 才能复用连接池
     http_client = httpx.AsyncClient(timeout=settings.REQUEST_TIMEOUT)
