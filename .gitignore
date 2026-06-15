@@ -47,3 +47,7 @@ data/
 *.db
 *.sqlite
 *.sqlite3
+
+# ===== 本地 AI / Trellis 开发辅助目录 =====
+.opencode/
+.trellis/
