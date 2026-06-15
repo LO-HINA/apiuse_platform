@@ -6,7 +6,7 @@ OpenAI 兼容协议的简化号池中转平台,用于测试和验证多上游 AP
 
 ## 当前进度
 
-**M2 后端核心已进入(2026-06-08)**:在 M1.5 领域目录基础上,补齐 `channels.json` 号池、加权随机、failover 黑名单和会话 LRU/TTL 内存控制。M3 管理后台尚未开始。
+**M2 后端核心已进入(2026-06-08)
 
 | 里程碑 | 状态 | 内容 |
 |---|---|---|
@@ -20,27 +20,6 @@ OpenAI 兼容协议的简化号池中转平台,用于测试和验证多上游 AP
 | M7 / M8 | 未开始 | Docker / pytest + CI |
 
 完整里程碑见 `CLAUDE.md` § 8。
-
-## 已实现
-
-- FastAPI 入口 + lifespan(httpx 单例 + `users.json` 启动加载)
-- JWT 认证(Argon2 + `get_current_user` / `get_optional_current_user` / `get_admin_user`)
-- 会话 CRUD + 消息存取 + 滑窗 trim(`SESSION_MAX_MESSAGES`)
-- M2 Channel 号池(`data/channels.json`) + 加权随机 + failover 黑名单
-- M2 总会话 LRU/TTL:清空闲置/过量会话的消息体,保留 session 元信息
-- SSE 流式聊天(首帧 session_id / token 事件 / error 事件 / `[DONE]`)
-- AI Provider 抽象(fake + openai_compat,真实模式走 channel 池)
-- 全局异常处理 + RequestID 中间件 + 结构化日志
-- 原生 HTML/JS 前端 + EventSource 接收流式 token
-
-## 技术栈
-
-- Python 3.10+
-- FastAPI + uvicorn
-- pydantic / pydantic-settings
-- httpx(异步上游调用)
-- argon2-cffi + PyJWT(鉴权)
-- 原生 HTML / CSS / JavaScript
 
 ## 项目结构
 
@@ -81,17 +60,6 @@ apiuse_platform/
 ├── README.md
 └── requirements.txt
 ```
-
-依赖方向单向(上层 → 下层,反向禁止):
-
-```
-modules/*           → storage / core
-modules/chat        → modules/sessions, modules/messages, modules/ai_providers
-modules/ai_providers → modules/channels              (真实上游调度时拿 channel,M2 起)
-api/deps            → modules/auth
-```
-
-跨模块只能走 `service.py` 暴露的函数,**不允许跨模块 import crud / models**。
 
 ## 安装与启动
 
@@ -162,80 +130,6 @@ uvicorn app.main:app --reload
 - OpenAPI 文档:<http://127.0.0.1:8000/docs>
 - 健康检查:<http://127.0.0.1:8000/health>
 
-## 接口列表(当前版本)
 
-### 鉴权 `/api/auth`
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| POST | `/api/auth/register` | 注册,成功直接返回 token |
-| POST | `/api/auth/login` | 用户名 + 密码登录,失败统一 401 |
-| GET | `/api/auth/me` | 当前登录用户信息 |
 
-### 会话 `/api/sessions`
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/sessions` | 列出当前用户最近 50 条会话 |
-| POST | `/api/sessions` | 新建会话(匿名也允许,user_id=None) |
-| GET | `/api/sessions/{session_id}` | 获取会话详情 + 消息列表 |
-| DELETE | `/api/sessions/{session_id}` | 幂等删除,不归你 / 不存在都返回 success=False |
-
-### 聊天 `/api/chat`
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/chat/stream?message=...&session_id=...` | SSE 流式聊天(核心) |
-
-匿名(不带 Authorization)也能用 `/api/chat/stream`,但 session 不绑定 user_id。
-
-## SSE 流式协议
-
-```
-data: {"session_id": "..."}      ← 第一帧,前端拿到后挂上
-data: {"token": "你"}
-data: {"token": "好"}
-data: [DONE]
-```
-
-异常时:
-
-```
-data: {"error": "上游连接失败"}
-data: [DONE]
-```
-
-客户端断开会被 `request.is_disconnected()` 检出,服务端不会再写 `[DONE]`(连接已没)。
-
-## 数据持久化
-
-| 数据 | 存储 | 重启行为 |
-|---|---|---|
-| User | `data/users.json` | 保留 |
-| Channel(M2) | `data/channels.json` | 保留 |
-| Session | 仅内存 | 重启清空 |
-| Message | 仅内存 | 重启清空;运行期受滑窗 + LRU/TTL 控制 |
-
-切 DB 触发条件、内存压力控制(滑窗 + LRU + TTL)详见 `CLAUDE.md` § 4。
-
-## 安全约束
-
-- `.env` / `data/` 不进 git(含 API Key 和密码哈希)
-- `JWT_SECRET` 启动期校验长度 ≥ 32,空值或过短直接拒启动
-- 上游 API Key 不向前端透出,日志只记录 channel id/name;后续管理接口也必须 mask
-- 浏览器前端不直接调上游模型,所有调用走后端代理
-- 管理类 API 由 `get_admin_user` 守住(基于 `role=admin`)
-
-## 协作工作流
-
-任何修改前必须:
-
-```
-Explain → Plan → Wait Confirm → Build → Build Summary
-```
-
-删文件 / 改公共接口 / 跨模块重组前必须列清单等确认。详见 `CLAUDE.md` § 6。
-
-## 当前不做的事
-
-M1 - M5 阶段不引入:数据库、计费 / 配额、完整 RBAC、Prometheus、WebSocket、前端框架、LangChain、向量数据库、Docker、pytest。详见 `CLAUDE.md` § 10。
