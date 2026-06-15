@@ -27,7 +27,7 @@ workspace/
 
 | Developer | Last Active | Sessions | Active File |
 |-----------|-------------|----------|-------------|
-| (none yet) | - | - | - |
+| LOHINA | 2026-06-15 | 1 | `journal-1.md` |
 
 ---
 
