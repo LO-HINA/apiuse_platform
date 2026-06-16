@@ -47,7 +47,7 @@ def load() -> None:
         logger.info("channels.json 不存在,以空 channel 池启动: %s", _CHANNELS_FILE)
         return
 
-    raw = json.loads(_CHANNELS_FILE.read_text(encoding="utf-8"))
+    raw = json.loads(_CHANNELS_FILE.read_text(encoding="utf-8-sig"))
     loaded: dict[str, ChannelConfig] = {}
     for item in _coerce_payload(raw):
         try:
@@ -74,6 +74,11 @@ def _flush_unlocked() -> None:
     ]
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(_CHANNELS_FILE)
+
+
+def count() -> int:
+    """同步返回当前 channel 数量,供启动和 dispatch 检测用。"""
+    return len(_channels)
 
 
 async def list_all() -> list[ChannelConfig]:

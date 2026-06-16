@@ -1,16 +1,18 @@
-/* 全局高级深色模式变量设计 (深度还原截图风格) */
+/* 全局高级深色模式变量设计 (仿 Gemini 极光黑) */
 :root {
-    --bg-main: #212121;         /* 主聊天区底色，截图中的深灰色 */
-    --bg-sidebar: #000000;      /* 侧边栏底色，截图中接近纯黑 */
-    --bg-sidebar-hover: #202123;/* 侧边栏悬停色 */
-    --bg-sidebar-active: #343541;/* 侧边栏选中色 */
-    --bg-bubble-user: #2f2f2f;  /* 用户消息气泡色 */
-    --bg-input: #2f2f2f;        /* 输入框背景色 */
-    --text-main: #ececf1;       /* 主文本色 */
-    --text-muted: #8e8ea0;      /* 次要文本色 */
-    --accent-color: #10a37f;    /* 经典 AI 翠绿主题色 */
-    --border-color: #4d4d4f;    /* 边框分割线颜色 */
-    --max-width-content: 800px; /* 黄金对话流宽度 */
+    --bg-main: #131314;         /* 极暗的深空灰 */
+    --bg-sidebar: #1E1F20;      /* 侧边栏稍亮一点点区分层级 */
+    --bg-sidebar-hover: #282A2C;
+    --bg-sidebar-active: #343541;
+    --bg-bubble-user: #2f2f2f;
+    --bg-input: #1E1F20;        /* 悬浮输入框底色 */
+    --bg-chip: #282A2C;         /* 附件胶囊底色 */
+    --text-main: #E3E3E3;
+    --text-muted: #A8C7FA;      /* 偏蓝的次要文本色 */
+    --accent-color: #10a37f;
+    --border-color: #4d4d4f;
+    --accent-glow: radial-gradient(circle at 50% 30%, rgba(43, 45, 87, 0.4) 0%, rgba(19, 19, 20, 1) 60%);
+    --max-width-content: 850px;
 }
 
 * {
@@ -190,9 +192,77 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: var(--bg-main);
+    background: var(--bg-main);
+    background-image: var(--accent-glow);
     position: relative;
     height: 100%;
+}
+
+.chat-header {
+    display: flex;
+    justify-content: flex-end;
+    padding: 16px 24px;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.icon-btn:hover { background-color: var(--bg-sidebar-hover); }
+
+.welcome-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 0 20px;
+    transition: opacity 0.3s;
+}
+
+.welcome-title {
+    font-size: 32px;
+    font-weight: 400;
+    margin-bottom: 40px;
+    color: #fff;
+    background: linear-gradient(90deg, #A8C7FA, #D7A6F5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.floating-input-area {
+    width: 100%;
+    max-width: var(--max-width-content);
+    background-color: var(--bg-input);
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.attachment-chips {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.chip {
+    background-color: var(--bg-chip);
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
 }
 
 /* 消息流主容器 */
@@ -314,32 +384,11 @@ body {
     40% { transform: scale(1.0); }
 }
 
-/* ==========================================================================
-   3. 底部输入区和发送按钮
-   ========================================================================== */
-.input-area {
-    padding: 12px 24px 20px 24px;
-    background-color: transparent;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
 .input-wrapper {
     display: flex;
-    align-items: flex-end; /* 底部对齐，实现多行时向上扩展 */
-    max-width: var(--max-width-content);
-    width: 100%;
-    position: relative;
-    background-color: var(--bg-input);
-    border-radius: 18px;       /* 对话框放大后,圆角也跟着放大保持比例 */
-    min-height: 64px;          /* 放大喵：从 48px 扩到 64px,看起来更宽敞 */
-    padding: 8px 12px;         /* 内边距同步加大 */
-    transition: box-shadow 0.2s;
-}
-
-.input-wrapper:focus-within {
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+    align-items: center;
+    gap: 12px;
+    background-color: transparent;
 }
 
 textarea {
@@ -347,18 +396,11 @@ textarea {
     border: none;
     background: transparent;
     color: var(--text-main);
-    /* 学习要点：原来这里写的是 `padding: 10px 48 10px 12px`,
-       右侧的 48 漏了 px 单位,根据 CSS 规范这条 padding 整条都会被忽略。
-       右侧又没留出按钮空间,长文本会被发送按钮盖住。修正:
-         - 右侧 56px = 按钮宽 40 + 右距 8 + 留 8 缓冲
-         - 上下 12px 让文字不顶住边框
-         - 字号 17 → 18,跟消息气泡对齐,看起来更舒服 */
-    padding: 12px 56px 12px 12px;
+    font-size: 16px;
     resize: none;
-    font-size: 18px;
-    line-height: 1.5;
-    font-family: inherit;
     outline: none;
+    font-family: inherit;
+    line-height: 1.5;
     max-height: 200px;
 }
 
@@ -366,17 +408,46 @@ textarea::placeholder {
     color: var(--text-muted);
 }
 
+.input-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.action-btn:hover { background-color: var(--bg-chip); }
+
+.model-selector {
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+.model-selector:hover { background-color: var(--bg-chip); }
+
 /* 发送按钮 */
 .send-btn {
-    position: absolute;
-    right: 10px;
-    bottom: 10px;             /* 配合 input-wrapper 的 padding 8 + 余量 */
-    width: 40px;              /* 放大喵：从 36 → 40 */
-    height: 40px;
-    background-color: #ffffff;
-    color: #000000;
+    width: 36px;
+    height: 36px;
+    background-color: #A8C7FA;
+    color: #000;
     border: none;
-    border-radius: 14px;
+    border-radius: 50%;
+    font-weight: bold;
+    font-size: 18px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -384,29 +455,15 @@ textarea::placeholder {
     transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
 }
 
-.send-btn:hover {
-    background-color: #e5e5e5;
-}
-
-.send-btn:active {
-    transform: scale(0.95);
-}
+.send-btn:hover { background-color: #bdd6ff; }
+.send-btn:active { transform: scale(0.9); }
 
 .send-btn:disabled {
-    /* 学习要点：原来 #242424 / #555 在深色背景里几乎看不出"已禁用",
-       用更亮的灰 + 半透明,让"流式生成中不能再点"的状态肉眼可辨。 */
     background-color: #4a4a4a;
     color: #888888;
     cursor: not-allowed;
     opacity: 0.7;
     transform: none;
-}
-
-.disclaimer {
-    font-size: 13px; /* B 档：从 12px 放大到 13px */
-    color: var(--text-muted);
-    margin-top: 12px;
-    text-align: center;
 }
 
 /* ==========================================================================

@@ -13,10 +13,11 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.core.logging import setup_logging
+from app.core.log_config import setup_logging
 from app.core.middleware import RequestIDMiddleware
 from app.modules.ai_providers.service import set_http_client
 from app.modules.auth.router import router as auth_router
+from app.modules.channels import crud as channels_crud
 from app.modules.channels.service import load_channels
 from app.modules.chat.router import router as chat_router
 from app.modules.chat.schemas import HealthResponse
@@ -48,6 +49,11 @@ async def lifespan(app: FastAPI):
     # M2 channel 池同样在启动期加载。缺少 channels.json 不阻塞启动,
     # 只有 USE_FAKE_AI=false 且真实调用进来时才会返回"无可用 channel"。
     load_channels()
+    if not settings.USE_FAKE_AI and channels_crud.count() == 0:
+        logger.warning(
+            "channel 池为空(未配置 data/channels.json),"
+            "已自动降级到 fake AI 模式。配置 channels.json 后重启即可切回真实上游。"
+        )
 
     # 全应用共享一个 httpx.AsyncClient 才能复用连接池
     http_client = httpx.AsyncClient(timeout=settings.REQUEST_TIMEOUT)

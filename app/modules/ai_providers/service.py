@@ -11,6 +11,7 @@ from typing import AsyncGenerator, List, Optional, Sequence
 import httpx
 
 from app.core.config import settings
+from app.modules.channels import crud as channels_crud
 from app.modules.messages.schemas import Message
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,10 @@ async def dispatch_chat(
 ) -> str:
     from app.modules.ai_providers import fake, openai_compat
 
+    if not settings.USE_FAKE_AI and channels_crud.count() == 0:
+        logger.warning("channel pool empty, falling back to fake AI")
+        return await fake.fake_ai_reply(message, history=history)
+
     impl = fake.fake_ai_reply if settings.USE_FAKE_AI else openai_compat.real_ai_reply
     return await impl(message, history=history)
 
@@ -72,6 +77,10 @@ async def dispatch_chat_stream(
     """命名 dispatch_* 避免和路由 handler 撞名。"""
     from app.modules.ai_providers import fake, openai_compat
 
-    impl = fake.fake_ai_stream if settings.USE_FAKE_AI else openai_compat.real_ai_stream
+    if not settings.USE_FAKE_AI and channels_crud.count() == 0:
+        logger.warning("channel pool empty, falling back to fake AI")
+        impl = fake.fake_ai_stream
+    else:
+        impl = fake.fake_ai_stream if settings.USE_FAKE_AI else openai_compat.real_ai_stream
     async for token in impl(message, history=history):
         yield token
