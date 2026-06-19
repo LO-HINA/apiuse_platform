@@ -110,8 +110,8 @@ async def persist_assistant(*, session_id: UUID, content: str) -> int | None:
 
 
 async def stream_tokens(
-    *, user_message: str, history: Sequence[Message],
+    *, user_message: str, history: Sequence[Message], model: str | None = None,
 ) -> AsyncIterator[str]:
     """薄包装:暴露 ai_providers.dispatch_chat_stream 给路由层。"""
-    async for token in dispatch_chat_stream(user_message, history=history):
+    async for token in dispatch_chat_stream(user_message, history=history, model=model):
         yield token

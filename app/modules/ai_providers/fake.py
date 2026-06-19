@@ -18,6 +18,7 @@ _FAKE_REPLY = (
 
 async def fake_ai_reply(
     message: str, history: Optional[Sequence[Message]] = None,
+    model: str | None = None,
 ) -> str:
     logger.debug(
         "fake_ai_reply: msg_len=%d history_len=%d",
@@ -29,6 +30,7 @@ async def fake_ai_reply(
 
 async def fake_ai_stream(
     message: str, history: Optional[Sequence[Message]] = None,
+    model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     logger.debug(
         "fake_ai_stream start: msg_len=%d history_len=%d",

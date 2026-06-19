@@ -18,6 +18,7 @@ from app.core.middleware import RequestIDMiddleware
 from app.modules.ai_providers.service import set_http_client
 from app.modules.auth.router import router as auth_router
 from app.modules.channels import crud as channels_crud
+from app.modules.channels.router import public_router as channels_public_router
 from app.modules.channels.router import router as channels_router
 from app.modules.channels.service import load_channels
 from app.modules.chat.router import router as chat_router
@@ -100,6 +101,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth_router)
 app.include_router(sessions_router)
 app.include_router(chat_router)
+app.include_router(channels_public_router)
 app.include_router(channels_router)
 
 

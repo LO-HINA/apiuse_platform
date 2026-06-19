@@ -93,7 +93,17 @@
                     <textarea id="message-input" placeholder="输入你想探讨的系统架构或代码逻辑..." rows="1"></textarea>
 
                     <div class="input-controls">
-                        <span class="model-selector">Pro ⌄</span>
+                        <div class="model-selector-wrapper" id="model-selector-wrapper">
+                            <button id="model-selector-btn" class="model-selector-btn" type="button" aria-expanded="false">
+                                <span id="model-selector-text">选择模型</span>
+                                <svg class="model-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
+                            <div id="model-dropdown" class="model-dropdown" hidden role="listbox" aria-label="选择模型">
+                                <div class="model-list" id="model-list" role="group"></div>
+                            </div>
+                        </div>
                         <button class="action-btn mic-btn" type="button" aria-label="语音">🎤</button>
                         <button id="send-btn" class="send-btn" type="submit" aria-label="发送">↑</button>
                     </div>

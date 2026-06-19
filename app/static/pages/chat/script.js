@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentEventSource = null;
     let currentSessionId = null;
+    let selectedModel = null;
+    let availableModels = [];
 
     // 用户信息 + 登出
     const logoutBtn = document.getElementById('logout-btn');
@@ -27,6 +29,129 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadUserInfo();
+    initModelSelector();
+
+    // ------------------------------------------------------------------
+    // 模型选择器
+    // ------------------------------------------------------------------
+
+    async function initModelSelector() {
+        const btn = document.getElementById('model-selector-btn');
+        const dropdown = document.getElementById('model-dropdown');
+        const modelList = document.getElementById('model-list');
+        const textEl = document.getElementById('model-selector-text');
+
+        if (!btn || !dropdown || !modelList) return;
+
+        // 加载所有可用模型
+        try {
+            const res = await fetch('/api/channels/models');
+            if (!res.ok) throw new Error('Failed to load models');
+            availableModels = await res.json();
+        } catch (err) {
+            textEl.textContent = '无可用模型';
+            return;
+        }
+
+        // 默认选中第一个可用模型
+        const firstAvailable = availableModels.find(m => m.available);
+        if (firstAvailable) {
+            selectedModel = firstAvailable.model;
+            textEl.textContent = selectedModel;
+        } else {
+            textEl.textContent = availableModels.length > 0 ? '无可用模型' : '选择模型';
+        }
+
+        renderModelList();
+
+        // 点击按钮切换下拉菜单
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = dropdown.hasAttribute('hidden');
+            if (isHidden) {
+                renderModelList();
+                dropdown.removeAttribute('hidden');
+                btn.setAttribute('aria-expanded', 'true');
+            } else {
+                dropdown.setAttribute('hidden', '');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // 点击外部关闭
+        document.addEventListener('click', (e) => {
+            const wrapper = document.getElementById('model-selector-wrapper');
+            if (!wrapper.contains(e.target)) {
+                dropdown.setAttribute('hidden', '');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Esc 键关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !dropdown.hasAttribute('hidden')) {
+                dropdown.setAttribute('hidden', '');
+                btn.setAttribute('aria-expanded', 'false');
+                btn.focus();
+            }
+        });
+    }
+
+    function renderModelList() {
+        const modelList = document.getElementById('model-list');
+        const textEl = document.getElementById('model-selector-text');
+        if (!modelList) return;
+
+        if (availableModels.length === 0) {
+            modelList.innerHTML = '<div class="model-empty">暂无可用模型</div>';
+            return;
+        }
+
+        modelList.innerHTML = '';
+        for (const item of availableModels) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'model-item';
+            if (!item.available) {
+                button.classList.add('disabled');
+            }
+            if (item.model === selectedModel) {
+                button.classList.add('selected');
+            }
+
+            const checkSvg = document.createElement('span');
+            checkSvg.className = 'model-check';
+            checkSvg.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'model-name';
+            nameSpan.textContent = item.model;
+
+            const channelSpan = document.createElement('span');
+            channelSpan.className = 'model-channel';
+            channelSpan.textContent = item.channel_name;
+
+            button.append(checkSvg, nameSpan, channelSpan);
+
+            if (!item.available) {
+                button.title = '该账号当前不可用';
+            } else {
+                button.addEventListener('click', () => {
+                    selectedModel = item.model;
+                    if (textEl) textEl.textContent = selectedModel;
+                    // 关闭 dropdown
+                    const dropdown = document.getElementById('model-dropdown');
+                    const btn = document.getElementById('model-selector-btn');
+                    if (dropdown) dropdown.setAttribute('hidden', '');
+                    if (btn) btn.setAttribute('aria-expanded', 'false');
+                    // 重新渲染高亮状态
+                    renderModelList();
+                });
+            }
+
+            modelList.appendChild(button);
+        }
+    }
 
     async function loadUserInfo() {
         const token = localStorage.getItem('access_token');
@@ -134,6 +259,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams({ message: userMessage });
         if (currentSessionId) {
             params.set('session_id', currentSessionId);
+        }
+        if (selectedModel) {
+            params.set('model', selectedModel);
         }
 
         const eventSource = new EventSource(`/api/chat/stream?${params.toString()}`);

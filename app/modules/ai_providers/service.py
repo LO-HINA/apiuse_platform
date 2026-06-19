@@ -73,6 +73,7 @@ async def dispatch_chat(
 
 async def dispatch_chat_stream(
     message: str, history: Optional[Sequence[Message]] = None,
+    model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """命名 dispatch_* 避免和路由 handler 撞名。"""
     from app.modules.ai_providers import fake, openai_compat
@@ -82,5 +83,5 @@ async def dispatch_chat_stream(
         impl = fake.fake_ai_stream
     else:
         impl = fake.fake_ai_stream if settings.USE_FAKE_AI else openai_compat.real_ai_stream
-    async for token in impl(message, history=history):
+    async for token in impl(message, history=history, model=model):
         yield token

@@ -47,6 +47,7 @@ async def chat_stream(
     session_id: Optional[UUID] = Query(
         None, description="会话 ID,不传则新建;传了但不存在或不归你时返回 404",
     ),
+    model: Optional[str] = Query(None, max_length=160, description="指定模型名，不传则使用默认"),
 ):
     """SSE 流式聊天。
 
@@ -70,8 +71,8 @@ async def chat_stream(
         )
 
     logger.info(
-        "stream chat start: session_id=%s user_id=%s msg_len=%d history=%d",
-        current_session_id, user_id, len(message), len(history),
+        "stream chat start: session_id=%s user_id=%s msg_len=%d history=%d model=%s",
+        current_session_id, user_id, len(message), len(history), model,
     )
 
     async def event_generator():
@@ -84,7 +85,7 @@ async def chat_stream(
 
         try:
             async for token in chat_service.stream_tokens(
-                user_message=message, history=history,
+                user_message=message, history=history, model=model,
             ):
                 if await request.is_disconnected():
                     cancelled = True

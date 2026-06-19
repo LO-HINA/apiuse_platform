@@ -26,16 +26,17 @@ def _request_payload(
     message: str,
     history: Optional[Sequence[Message]],
     stream: bool,
+    model: str | None = None,
 ) -> tuple[str, dict, dict]:
     """构造请求三件套。headers 只交给 httpx,不要写日志。"""
-    model = channel.model_for_request(settings.AI_MODEL)
+    actual_model = model or channel.model_for_request(settings.AI_MODEL)
     url = f"{channel.base_url}/chat/completions"
     headers = {
         "Authorization": f"Bearer {channel.api_key}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": model,
+        "model": actual_model,
         "messages": build_messages(message, history),
         "stream": stream,
     }
@@ -72,11 +73,12 @@ async def _real_ai_stream_once(
     *,
     message: str,
     history: Optional[Sequence[Message]],
+    model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """对单个 channel 发起一次流式请求。失败分类由外层 failover 处理。"""
     client = get_http_client()
     url, headers, payload = _request_payload(
-        channel, message=message, history=history, stream=True,
+        channel, message=message, history=history, stream=True, model=model,
     )
     logger.info(
         "real_ai_stream calling: channel=%s model=%s",
@@ -105,6 +107,7 @@ async def _real_ai_stream_once(
 
 async def real_ai_stream(
     message: str, history: Optional[Sequence[Message]] = None,
+    model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """stream=true 逐行解析 SSE,只透传 delta.content。
 
@@ -123,7 +126,7 @@ async def real_ai_stream(
         tried_ids.add(channel.id)
         emitted = False
         try:
-            async for token in _real_ai_stream_once(channel, message=message, history=history):
+            async for token in _real_ai_stream_once(channel, message=message, history=history, model=model):
                 emitted = True
                 yield token
             await channels_service.mark_success(channel)

@@ -1,12 +1,13 @@
 """Admin API for channel accounts."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_admin_user
-from app.modules.channels import service
+from app.modules.channels import crud, service
 from app.modules.channels.schemas import (
     ChannelBulkImportRequest,
     ChannelBulkImportResponse,
@@ -17,6 +18,28 @@ from app.modules.channels.schemas import (
 from app.storage import UserRecord
 
 router = APIRouter(prefix="/api/admin/channels", tags=["channels"])
+
+public_router = APIRouter(prefix="/api/channels", tags=["channels-public"])
+
+
+@public_router.get("/models")
+async def list_models() -> list[dict]:
+    """Return all available models from all channels (no auth required)."""
+    channels = await crud.list_all()
+    now = datetime.now(timezone.utc)
+    models: list[dict] = []
+    for ch in channels:
+        available = ch.enabled and (
+            ch.blacklisted_until is None or ch.blacklisted_until <= now
+        )
+        for model in ch.models:
+            models.append({
+                "model": model,
+                "channel_name": ch.name,
+                "channel_id": ch.id,
+                "available": available,
+            })
+    return models
 
 
 @router.get("", response_model=list[ChannelPublic])
