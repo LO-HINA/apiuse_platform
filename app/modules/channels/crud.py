@@ -1,14 +1,10 @@
-"""Channel JSON CRUD。
-
-M2 不引入数据库。channels.json 是本地敏感配置文件,包含上游 API Key,
-已经由 `.gitignore` 的 `data/` 规则保护。这里不提供任何会把 api_key
-返回给前端的函数。
-"""
+"""JSON CRUD for channel accounts."""
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,8 +14,10 @@ logger = logging.getLogger(__name__)
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 _CHANNELS_FILE = _DATA_DIR / "channels.json"
+_AUTH_DIR = _DATA_DIR / "channels" / "auth"
 
 _channels: dict[str, ChannelConfig] = {}
+_sources: dict[str, Path] = {}
 _lock = asyncio.Lock()
 _loaded = False
 
@@ -29,55 +27,126 @@ def _now() -> datetime:
 
 
 def _coerce_payload(raw: object) -> list[object]:
-    """兼容两种本地写法:直接数组,或 {"channels": [...]}。"""
     if isinstance(raw, list):
         return raw
     if isinstance(raw, dict) and isinstance(raw.get("channels"), list):
         return raw["channels"]
-    raise ValueError("channels.json must be a list or {'channels': [...]}")
+    if isinstance(raw, dict):
+        return [raw]
+    raise ValueError("channel json must be an object, list, or {'channels': [...]}")
+
+
+def _safe_file_stem(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9_.-]+", "-", value.strip()).strip(".-")
+    return normalized or "channel"
+
+
+def _normalize_item(item: object, *, default_id: str | None = None) -> object:
+    if not isinstance(item, dict):
+        return item
+
+    data = dict(item)
+    if "base_url" not in data and "url" in data:
+        data["base_url"] = data["url"]
+    if "api_key" not in data and "key" in data:
+        data["api_key"] = data["key"]
+    if "id" not in data and default_id:
+        data["id"] = default_id
+    if "name" not in data and data.get("id"):
+        data["name"] = data["id"]
+
+    models = data.get("models")
+    if isinstance(models, str):
+        data["models"] = [
+            model.strip()
+            for model in re.split(r"[,|;\n]+", models)
+            if model.strip()
+        ]
+    return data
+
+
+def _load_file(file_path: Path, *, default_id: str | None = None) -> int:
+    raw = json.loads(file_path.read_text(encoding="utf-8-sig"))
+    loaded_count = 0
+    for item in _coerce_payload(raw):
+        normalized = _normalize_item(item, default_id=default_id)
+        try:
+            channel = ChannelConfig.model_validate(normalized)
+        except Exception:  # noqa: BLE001 - never log raw key material
+            label = normalized.get("id", "?") if isinstance(normalized, dict) else "?"
+            logger.warning("channel config skipped: id=%s reason=validation_error", label)
+            continue
+        if channel.id in _channels:
+            logger.info("channel config override: id=%s source=%s", channel.id, file_path.name)
+        _channels[channel.id] = channel
+        _sources[channel.id] = file_path
+        loaded_count += 1
+    return loaded_count
 
 
 def load() -> None:
-    """启动期同步加载 channels.json;文件缺失时以空池启动。"""
+    """Load legacy channels.json and data/channels/auth/*.json once."""
     global _loaded
     if _loaded:
         return
-    if not _CHANNELS_FILE.exists():
-        _loaded = True
-        logger.info("channels.json 不存在,以空 channel 池启动: %s", _CHANNELS_FILE)
-        return
-
-    raw = json.loads(_CHANNELS_FILE.read_text(encoding="utf-8-sig"))
-    loaded: dict[str, ChannelConfig] = {}
-    for item in _coerce_payload(raw):
-        try:
-            channel = ChannelConfig.model_validate(item)
-        except Exception:  # noqa: BLE001 - 配置文件错误要定位,但不能打印 key
-            label = item.get("id", "?") if isinstance(item, dict) else "?"
-            logger.warning("channel config skipped: id=%s reason=validation_error", label)
-            continue
-        loaded[channel.id] = channel
 
     _channels.clear()
-    _channels.update(loaded)
+    _sources.clear()
+    legacy_count = 0
+    auth_count = 0
+
+    if _CHANNELS_FILE.exists():
+        try:
+            legacy_count = _load_file(_CHANNELS_FILE)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("legacy channels file skipped: reason=invalid_json")
+
+    if _AUTH_DIR.exists():
+        for file_path in sorted(_AUTH_DIR.glob("*.json")):
+            try:
+                auth_count += _load_file(file_path, default_id=file_path.stem)
+            except (json.JSONDecodeError, ValueError):
+                logger.warning("channel auth file skipped: file=%s reason=invalid_json", file_path.name)
+
     _loaded = True
-    logger.info("channels.json 加载完成: count=%d", len(_channels))
+    logger.info(
+        "channels loaded: total=%d legacy=%d auth=%d",
+        len(_channels), legacy_count, auth_count,
+    )
 
 
-def _flush_unlocked() -> None:
-    """原子写盘。调用方必须已经持有 _lock。"""
-    _DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = _CHANNELS_FILE.with_suffix(_CHANNELS_FILE.suffix + ".tmp")
-    payload = [
-        channel.model_dump(mode="json")
-        for channel in sorted(_channels.values(), key=lambda c: c.id)
-    ]
+def _dump_channel(channel: ChannelConfig) -> dict:
+    payload = channel.model_dump(mode="json")
+    payload["url"] = payload.pop("base_url")
+    payload["key"] = payload.pop("api_key")
+    return payload
+
+
+def _ensure_layout_unlocked() -> None:
+    _AUTH_DIR.mkdir(parents=True, exist_ok=True)
+    if not _CHANNELS_FILE.exists():
+        _CHANNELS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _CHANNELS_FILE.with_suffix(_CHANNELS_FILE.suffix + ".tmp")
+        tmp.write_text("[]\n", encoding="utf-8")
+        tmp.replace(_CHANNELS_FILE)
+
+
+def _flush_path_unlocked(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ids = sorted(channel_id for channel_id, source in _sources.items() if source == path)
+    payload_items = [_dump_channel(_channels[channel_id]) for channel_id in ids]
+    payload: object
+    if path == _CHANNELS_FILE or len(payload_items) != 1:
+        payload = payload_items
+    else:
+        payload = payload_items[0]
+
+    tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(_CHANNELS_FILE)
+    tmp.replace(path)
 
 
 def count() -> int:
-    """同步返回当前 channel 数量,供启动和 dispatch 检测用。"""
     return len(_channels)
 
 
@@ -91,8 +160,23 @@ async def get(channel_id: str) -> ChannelConfig | None:
         return _channels.get(channel_id)
 
 
+async def create(channel: ChannelConfig) -> ChannelConfig:
+    async with _lock:
+        if channel.id in _channels:
+            raise ValueError("channel id already exists")
+
+        _ensure_layout_unlocked()
+        file_path = _AUTH_DIR / f"{_safe_file_stem(channel.id)}.json"
+        if file_path.exists():
+            raise ValueError("channel file already exists")
+
+        _channels[channel.id] = channel
+        _sources[channel.id] = file_path
+        _flush_path_unlocked(file_path)
+        return channel
+
+
 async def mark_success(channel_id: str) -> None:
-    """记录成功并清掉过期/历史黑名单。"""
     async with _lock:
         channel = _channels.get(channel_id)
         if channel is None:
@@ -100,7 +184,7 @@ async def mark_success(channel_id: str) -> None:
         channel.success_count += 1
         channel.blacklisted_until = None
         channel.updated_at = _now()
-        _flush_unlocked()
+        _flush_path_unlocked(_sources[channel_id])
 
 
 async def mark_failure(
@@ -109,7 +193,6 @@ async def mark_failure(
     retryable: bool,
     blacklist_seconds: int,
 ) -> None:
-    """记录失败;只有 retryable 失败才临时拉黑。"""
     async with _lock:
         channel = _channels.get(channel_id)
         if channel is None:
@@ -118,4 +201,4 @@ async def mark_failure(
         if retryable and blacklist_seconds > 0:
             channel.blacklisted_until = _now() + timedelta(seconds=blacklist_seconds)
         channel.updated_at = _now()
-        _flush_unlocked()
+        _flush_path_unlocked(_sources[channel_id])

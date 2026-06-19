@@ -51,3 +51,6 @@ data/
 # ===== 本地 AI / Trellis 开发辅助目录 =====
 .opencode/
 .trellis/
+
+# ===== 其他 =====
+waste

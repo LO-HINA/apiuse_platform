@@ -131,13 +131,12 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 ### 4. 启动服务
 
 ```powershell
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8080
 ```
 
-- 聊天页:<http://127.0.0.1:8000/>
-- OpenAPI 文档:<http://127.0.0.1:8000/docs>
-- 健康检查:<http://127.0.0.1:8000/health>
-
+- 聊天页:<http://127.0.0.1:8080/>
+- OpenAPI 文档:<http://127.0.0.1:8080/docs>
+- 健康检查:<http://127.0.0.1:8080/health>
 
 
 

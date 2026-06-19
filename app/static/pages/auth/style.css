@@ -102,6 +102,10 @@ body {
     color: var(--bg-btn);
 }
 
+[hidden] {
+    display: none !important;
+}
+
 .auth-panel {
     display: flex;
     flex-direction: column;

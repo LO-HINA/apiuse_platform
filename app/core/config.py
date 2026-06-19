@@ -63,8 +63,8 @@ class Settings(BaseSettings):
 
     # CORS:allow_origins=["*"] 不能和 allow_credentials=True 共存,默认列具体域名
     CORS_ALLOW_ORIGINS: list[str] = [
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
     ]
 
     # ------------------------------------------------------------------

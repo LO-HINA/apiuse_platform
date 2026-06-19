@@ -1,21 +1,26 @@
-"""Channel 业务服务。
-
-这里是 M2 号池的公共边界:加载本地 JSON、选择可用 channel、记录成功/失败。
-provider 层只关心"给我一条可用 channel"和"这次调用结果如何"。
-"""
+"""Channel service boundary."""
 from __future__ import annotations
 
+import csv
 import logging
+from uuid import uuid4
 
 from app.core.config import settings
 from app.modules.channels import crud, scheduler
-from app.modules.channels.schemas import ChannelConfig, ChannelFailureSnapshot
+from app.modules.channels.schemas import (
+    ChannelBulkImportResponse,
+    ChannelConfig,
+    ChannelCreateRequest,
+    ChannelFailureSnapshot,
+    ChannelModelOptionsResponse,
+    ChannelPublic,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ChannelPoolError(Exception):
-    """channel 池不可用。message 必须是可返回给用户的安全文本。"""
+    """User-safe channel pool error."""
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -26,12 +31,138 @@ def load_channels() -> None:
     crud.load()
 
 
+def _mask_api_key(api_key: str) -> str:
+    if len(api_key) <= 4:
+        return "***"
+    prefix = api_key[:3] if len(api_key) > 7 else ""
+    return f"{prefix}***{api_key[-4:]}"
+
+
+def _public(channel: ChannelConfig) -> ChannelPublic:
+    return ChannelPublic(
+        id=channel.id,
+        name=channel.name,
+        provider_type=channel.provider_type,
+        base_url=channel.base_url,
+        api_key_masked=_mask_api_key(channel.api_key),
+        organization=channel.organization,
+        models=channel.models,
+        group=channel.group,
+        model_redirect=channel.model_redirect,
+        weight=channel.weight,
+        enabled=channel.enabled,
+        blacklisted_until=channel.blacklisted_until,
+        success_count=channel.success_count,
+        failure_count=channel.failure_count,
+        created_at=channel.created_at,
+        updated_at=channel.updated_at,
+    )
+
+
+def _new_channel_id() -> str:
+    return f"ch_{uuid4().hex[:12]}"
+
+
+def model_options() -> ChannelModelOptionsResponse:
+    return ChannelModelOptionsResponse(
+        models=[
+            "gpt-4o-mini",
+            "gpt-4o",
+            "gpt-4.1-mini",
+            "gpt-4.1",
+            "o4-mini",
+            "deepseek-chat",
+            "deepseek-reasoner",
+            "Qwen/Qwen2.5-72B-Instruct",
+        ],
+    )
+
+
+async def list_public_channels() -> list[ChannelPublic]:
+    channels = await crud.list_all()
+    return [_public(channel) for channel in sorted(channels, key=lambda item: item.created_at)]
+
+
+async def create_channel(payload: ChannelCreateRequest) -> ChannelPublic:
+    models = list(payload.models)
+    if payload.custom_model_name and payload.custom_model_name not in models:
+        models.append(payload.custom_model_name)
+    base_url = payload.base_url or "https://api.openai.com/v1"
+    channel = ChannelConfig(
+        id=payload.id or _new_channel_id(),
+        name=payload.name,
+        provider_type=payload.provider_type,
+        base_url=base_url,
+        api_key=payload.api_key.get_secret_value(),
+        organization=payload.organization,
+        models=models,
+        group=payload.group,
+        model_redirect=payload.model_redirect,
+        weight=payload.weight,
+        enabled=payload.enabled,
+    )
+    created = await crud.create(channel)
+    logger.info("channel created: channel=%s", created.safe_label())
+    return _public(created)
+
+
+def _parse_models(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [item.strip() for item in raw.replace(";", "|").split("|") if item.strip()]
+
+
+async def bulk_import_channels(raw_text: str) -> ChannelBulkImportResponse:
+    created: list[ChannelPublic] = []
+    errors: list[str] = []
+    skipped = 0
+
+    for line_no, line in enumerate(raw_text.splitlines(), start=1):
+        text = line.strip()
+        if not text or text.startswith("#"):
+            skipped += 1
+            continue
+
+        try:
+            row = next(csv.reader([text]))
+        except csv.Error:
+            errors.append(f"line {line_no}: parse_error")
+            continue
+        if len(row) < 3:
+            errors.append(f"line {line_no}: expected name,api_key,base_url")
+            continue
+
+        name, api_key, base_url = (item.strip() for item in row[:3])
+        models = _parse_models(row[3].strip() if len(row) >= 4 else None)
+        try:
+            public = await create_channel(
+                ChannelCreateRequest(
+                    name=name,
+                    api_key=api_key,
+                    base_url=base_url,
+                    models=models,
+                )
+            )
+        except Exception:  # noqa: BLE001 - do not echo raw import rows
+            logger.info("channel import skipped: line=%d reason=validation_or_duplicate", line_no)
+            errors.append(f"line {line_no}: validation_error")
+            continue
+        created.append(public)
+
+    return ChannelBulkImportResponse(
+        imported=len(created),
+        skipped=skipped,
+        errors=errors,
+        channels=created,
+    )
+
+
 async def select_channel(*, exclude_ids: set[str] | None = None) -> ChannelConfig:
     channels = await crud.list_all()
     usable = scheduler.usable_channels(channels, exclude_ids=exclude_ids)
     selected = scheduler.pick_weighted(usable)
     if selected is None:
-        raise ChannelPoolError("没有可用的上游 channel,请检查 channels.json 或等待黑名单过期")
+        raise ChannelPoolError("没有可用的上游 channel,请检查账号 JSON 或等待黑名单过期")
     logger.info("channel selected: channel=%s", selected.safe_label())
     return selected
 
