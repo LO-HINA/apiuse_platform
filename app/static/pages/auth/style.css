@@ -14,26 +14,12 @@
     --border-focus: rgba(168, 199, 250, 0.5);
     --error-color: #ef4444;
     --error-bg: rgba(239, 68, 68, 0.1);
-    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-    --radius: 12px;
     --radius-sm: 8px;
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
-html, body {
-    height: 100%;
-}
-
 body {
-    font-family: var(--font);
     background: var(--bg-page);
     color: var(--text-primary);
-    -webkit-font-smoothing: antialiased;
 }
 
 .auth-wrapper {
@@ -100,10 +86,6 @@ body {
 
 .auth-logo svg {
     color: var(--bg-btn);
-}
-
-[hidden] {
-    display: none !important;
 }
 
 .auth-panel {

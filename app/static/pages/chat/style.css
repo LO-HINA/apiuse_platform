@@ -1,5 +1,4 @@
 :root {
-    --bg-main: #131314;
     --bg-sidebar: #1e1f20;
     --bg-sidebar-hover: #282a2c;
     --bg-sidebar-active: #343541;
@@ -8,7 +7,6 @@
     --bg-bubble-user: #2f2f2f;
     --bg-input: #1e1f20;
     --bg-chip: #282a2c;
-    --text-main: #e3e3e3;
     --text-muted: #a8c7fa;
     --accent-color: #10a37f;
     --border-color: #4d4d4f;
@@ -16,36 +14,8 @@
     --max-width-content: 850px;
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-}
-
-html,
 body {
-    height: 100%;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: var(--bg-main);
-    color: var(--text-main);
     overflow: hidden;
-}
-
-button,
-textarea {
-    font: inherit;
-}
-
-button {
-    border: 0;
-}
-
-a {
-    color: inherit;
-    text-decoration: none;
 }
 
 .app-container {
