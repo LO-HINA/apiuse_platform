@@ -1,14 +1,15 @@
-/* 全局高级深色模式变量设计 (仿 Gemini 极光黑) */
 :root {
-    --bg-main: #131314;         /* 极暗的深空灰 */
-    --bg-sidebar: #1E1F20;      /* 侧边栏稍亮一点点区分层级 */
-    --bg-sidebar-hover: #282A2C;
+    --bg-main: #131314;
+    --bg-sidebar: #1e1f20;
+    --bg-sidebar-hover: #282a2c;
     --bg-sidebar-active: #343541;
+    --bg-panel: #18191b;
+    --bg-panel-soft: #1e1f20;
     --bg-bubble-user: #2f2f2f;
-    --bg-input: #1E1F20;        /* 悬浮输入框底色 */
-    --bg-chip: #282A2C;         /* 附件胶囊底色 */
-    --text-main: #E3E3E3;
-    --text-muted: #A8C7FA;      /* 偏蓝的次要文本色 */
+    --bg-input: #1e1f20;
+    --bg-chip: #282a2c;
+    --text-main: #e3e3e3;
+    --text-muted: #a8c7fa;
     --accent-color: #10a37f;
     --border-color: #4d4d4f;
     --accent-glow: radial-gradient(circle at 50% 30%, rgba(43, 45, 87, 0.4) 0%, rgba(19, 19, 20, 1) 60%);
@@ -21,13 +22,30 @@
     padding: 0;
 }
 
+html,
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: var(--bg-main);
+    height: 100%;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg-main);
     color: var(--text-main);
-    height: 100vh;
     overflow: hidden;
-    display: flex;
+}
+
+button,
+textarea {
+    font: inherit;
+}
+
+button {
+    border: 0;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
 }
 
 .app-container {
@@ -36,19 +54,13 @@ body {
     height: 100%;
 }
 
-/* ==========================================================================
-   1. 左侧边栏 (Sidebar) - 完全匹配截图与要求
-   ========================================================================== */
 .sidebar {
-    width: 320px; /* B 档：从 250px 放大到 280px */
-    background-color: var(--bg-sidebar);
-    font-size: 16px; /* B 档：从 14px 放大到 16px */
-    line-height: 1.5;
+    width: 320px;
+    background: var(--bg-sidebar);
     display: flex;
     flex-direction: column;
     padding: 10px 12px;
     flex-shrink: 0;
-    z-index: 10;
 }
 
 .sidebar-top {
@@ -63,14 +75,14 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    font-size: 16px; /* B 档：从 14px 放大到 16px */
+    font-size: 16px;
     font-weight: 500;
-    color: var(--text-main);
-    cursor: pointer;
     border-radius: 8px;
 }
-.brand:hover { background-color: var(--bg-sidebar-hover); }
-.brand svg { color: var(--text-muted); }
+
+.brand:hover {
+    background: var(--bg-sidebar-hover);
+}
 
 .nav-menu {
     display: flex;
@@ -82,16 +94,19 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
     padding: 10px 12px;
     border-radius: 8px;
     color: var(--text-main);
+    background: transparent;
     cursor: pointer;
-    transition: background-color 0.2s;
+    text-align: left;
 }
-.nav-item:hover { background-color: var(--bg-sidebar-hover); }
-.nav-item svg { color: var(--text-main); }
 
-/* 会话列表 */
+.nav-item:hover {
+    background: var(--bg-sidebar-hover);
+}
+
 .history-list {
     flex: 1;
     overflow-y: auto;
@@ -104,90 +119,22 @@ body {
     scrollbar-color: #3a3a3a transparent;
 }
 
-.history-list::-webkit-scrollbar { width: 4px; }
-.history-list::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 2px; }
+.history-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 2px;
+}
 
 .history-section-title {
-    font-size: 13px; /* B 档：从 12px 放大到 13px */
+    font-size: 13px;
     font-weight: 500;
     color: var(--text-muted);
     padding: 10px 12px;
 }
 
-.history-item {
-    display: flex;
-    align-items: center;
-    padding: 10px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    color: var(--text-main);
-    transition: background-color 0.15s;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.history-item:hover { background-color: var(--bg-sidebar-hover); }
-
-.history-item.active {
-    background-color: var(--bg-sidebar-active);
-}
-
-/* 侧边栏底部用户信息 */
-.sidebar-bottom {
-    padding-top: 10px;
-    margin-top: 8px;
-}
-
-.user-profile {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.user-profile:hover {
-    background-color: var(--bg-sidebar-hover);
-}
-
-.user-avatar {
-    width: 32px;
-    height: 32px;
-    background-color: #a84c59; /* 匹配截图LH头像颜色 */
-    color: #ffffff;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 500;
-    font-size: 12px;
-}
-
-.user-info {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.user-name {
-    font-weight: 500;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.user-status {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-/* ==========================================================================
-   右侧主内容对话区 (Main Content)
-   ========================================================================== */
 .chat-main {
     flex: 1;
     display: flex;
@@ -195,119 +142,116 @@ body {
     background: var(--bg-main);
     background-image: var(--accent-glow);
     position: relative;
+    min-width: 0;
     height: 100%;
+    overflow: hidden;
 }
 
 .chat-header {
     display: flex;
     justify-content: flex-end;
     padding: 16px 24px;
+    flex-shrink: 0;
 }
 
 .icon-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 20px;
-    cursor: pointer;
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
 }
-.icon-btn:hover { background-color: var(--bg-sidebar-hover); }
+
+.icon-btn:hover {
+    background: var(--bg-sidebar-hover);
+}
 
 .welcome-screen {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100%;
     padding: 0 20px;
-    transition: opacity 0.3s;
+    transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
 .welcome-title {
     font-size: 32px;
     font-weight: 400;
+    text-align: center;
     margin-bottom: 40px;
-    color: #fff;
-    background: linear-gradient(90deg, #A8C7FA, #D7A6F5);
+    background: linear-gradient(90deg, #a8c7fa, #d7a6f5);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
-.floating-input-area {
-    width: 100%;
-    max-width: var(--max-width-content);
-    background-color: var(--bg-input);
-    border-radius: 24px;
-    padding: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-.attachment-chips {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 12px;
-}
-
-.chip {
-    background-color: var(--bg-chip);
-    padding: 12px 16px;
-    border-radius: 12px;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 1px solid rgba(255,255,255,0.05);
-}
-
-/* 消息流主容器 */
 .chat-container {
     flex: 1;
     overflow-y: auto;
-    padding: 50px 32px 30px 32px;
-    display: flex;
+    padding: 14px 32px 24px;
+    display: none;
     flex-direction: column;
     gap: 24px;
     scroll-behavior: smooth;
-    /* 学习要点：Webkit 系（Chrome/Edge/Safari）用上面的 ::-webkit-scrollbar；
-       Firefox 不认这套，得用下面这两个标准属性。两套都写,各自的浏览器自动选生效的那一套。 */
     scrollbar-width: thin;
     scrollbar-color: #424242 transparent;
 }
 
-.chat-container::-webkit-scrollbar { width: 8px; }
-.chat-container::-webkit-scrollbar-track { background: transparent; }
-.chat-container::-webkit-scrollbar-thumb { background: #424242; border-radius: 4px; }
-.chat-container::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+.chat-main.is-chatting .welcome-screen {
+    display: none;
+}
 
-/* 2. 聊天区消息气泡：整体排布 */
+.chat-main.is-chatting .chat-container {
+    display: flex;
+}
+
+.chat-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+    background: #424242;
+    border-radius: 4px;
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover {
+    background: #4f4f4f;
+}
+
 .message {
     display: flex;
     gap: 16px;
     max-width: var(--max-width-content);
     margin: 0 auto;
     width: 100%;
-    animation: fadeIn 0.3s ease-out forwards;
+    animation: fadeIn 0.22s ease-out forwards;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-/* 2. 聊天区消息气泡：用户消息靠右，AI 消息靠左 */
 .message.user-message {
     flex-direction: row-reverse;
 }
 
-/* 头像设计（AI需要，用户隐藏以实现纯气泡） */
 .avatar {
-    width: 36px; /* B 档：从 30px 放大到 32px */
+    width: 36px;
     height: 36px;
     border-radius: 50%;
     display: flex;
@@ -315,51 +259,48 @@ body {
     justify-content: center;
     font-size: 13px;
     font-weight: 600;
-    color: #ffffff;
+    color: #fff;
     flex-shrink: 0;
 }
 
 .ai-message .avatar {
-    background-color: var(--accent-color);
+    background: var(--accent-color);
 }
 
 .user-message .avatar {
-    display: none; 
+    display: none;
 }
 
-/* 2. 聊天区消息气泡：统一格式 (字体/行高/最大宽度/内边距/圆角) */
 .message-content {
-    font-size: 18px;         /* B 档：从 16px 放大到 17px */
-    line-height: 1.5;
+    font-size: 18px;
+    line-height: 1.6;
     padding: 12px 16px;
     border-radius: 14px;
-    max-width: 60%;
-    word-wrap: break-word;
+    max-width: min(72ch, 70%);
+    word-break: break-word;
+    white-space: pre-wrap;
     color: var(--text-main);
 }
 
-/* 区分用户和 AI 的背景色 */
 .user-message .message-content {
-    background-color: var(--bg-bubble-user);
+    background: var(--bg-bubble-user);
 }
 
 .ai-message .message-content {
-    background-color: transparent; /* AI 侧通常没有明显气泡背景，或者跟主背景融为一体 */
+    background: transparent;
 }
 
-/* ==========================================================================
-   AI 正在生成状态提示器
-   ========================================================================== */
 .status-indicator {
     max-width: var(--max-width-content);
     margin: 0 auto;
     width: 100%;
-    padding: 0 24px 8px 46px; /* 留出头像宽度 */
-    display: none; 
+    padding: 0 24px 8px 46px;
+    display: none;
     align-items: center;
     gap: 8px;
     font-size: 14px;
     color: var(--text-muted);
+    flex-shrink: 0;
 }
 
 .typing-loader {
@@ -371,27 +312,63 @@ body {
 .typing-loader span {
     width: 5px;
     height: 5px;
-    background-color: var(--text-muted);
+    background: var(--text-muted);
     border-radius: 50%;
     display: inline-block;
     animation: sk-bouncedelay 1.4s infinite ease-in-out both;
 }
-.typing-loader span:nth-child(1) { animation-delay: -0.32s; }
-.typing-loader span:nth-child(2) { animation-delay: -0.16s; }
+
+.typing-loader span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-loader span:nth-child(2) {
+    animation-delay: -0.16s;
+}
 
 @keyframes sk-bouncedelay {
-    0%, 80%, 100% { transform: scale(0); }
-    40% { transform: scale(1.0); }
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+.composer-shell {
+    position: relative;
+    flex-shrink: 0;
+    padding: 0 24px 24px;
+}
+
+.chat-main:not(.is-chatting) .composer-shell {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% + 28px);
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.chat-main:not(.is-chatting) .input-wrapper {
+    width: 100%;
+    max-width: var(--max-width-content);
+    pointer-events: auto;
 }
 
 .input-wrapper {
     display: flex;
     align-items: center;
     gap: 12px;
-    background-color: transparent;
+    background: var(--bg-input);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-textarea {
+.input-wrapper textarea {
     flex: 1;
     border: none;
     background: transparent;
@@ -399,12 +376,12 @@ textarea {
     font-size: 16px;
     resize: none;
     outline: none;
-    font-family: inherit;
     line-height: 1.5;
     max-height: 200px;
+    min-height: 24px;
 }
 
-textarea::placeholder {
+.input-wrapper textarea::placeholder {
     color: var(--text-muted);
 }
 
@@ -415,19 +392,18 @@ textarea::placeholder {
 }
 
 .action-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 18px;
-    cursor: pointer;
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
 }
-.action-btn:hover { background-color: var(--bg-chip); }
+
+.action-btn:hover {
+    background: var(--bg-chip);
+}
 
 .model-selector {
     font-size: 13px;
@@ -436,17 +412,18 @@ textarea::placeholder {
     padding: 4px 8px;
     border-radius: 6px;
 }
-.model-selector:hover { background-color: var(--bg-chip); }
 
-/* 发送按钮 */
+.model-selector:hover {
+    background: var(--bg-chip);
+}
+
 .send-btn {
     width: 36px;
     height: 36px;
-    background-color: #A8C7FA;
+    background: #a8c7fa;
     color: #000;
-    border: none;
     border-radius: 50%;
-    font-weight: bold;
+    font-weight: 700;
     font-size: 18px;
     cursor: pointer;
     display: flex;
@@ -455,22 +432,144 @@ textarea::placeholder {
     transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
 }
 
-.send-btn:hover { background-color: #bdd6ff; }
-.send-btn:active { transform: scale(0.9); }
+.send-btn:hover {
+    background: #bdd6ff;
+}
+
+.send-btn:active {
+    transform: scale(0.92);
+}
 
 .send-btn:disabled {
-    background-color: #4a4a4a;
-    color: #888888;
+    background: #4a4a4a;
+    color: #888;
     cursor: not-allowed;
     opacity: 0.7;
     transform: none;
 }
 
-/* ==========================================================================
-   无障碍：尊重用户的"减少动画"系统偏好
-   学习要点：macOS / Windows 都能开"减少动效"开关,前庭功能敏感的用户开了之后
-   就不希望看到 fadeIn / typing-loader 这类动画。这里用 @media 一键全关。
-   ========================================================================== */
+/* 底部用户菜单 */
+.sidebar-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-color);
+    margin-top: auto;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.user-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #a8c7fa;
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.user-name {
+    font-size: 14px;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logout-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+.logout-btn:hover {
+    background: var(--bg-sidebar-hover);
+    color: #ef4444;
+}
+
+@media (max-width: 920px) {
+    .sidebar {
+        width: 260px;
+    }
+
+    .message-content {
+        max-width: 82%;
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 760px) {
+    body {
+        overflow: auto;
+    }
+
+    .app-container {
+        flex-direction: column;
+        min-height: 100vh;
+        height: auto;
+    }
+
+    .sidebar {
+        width: 100%;
+    }
+
+    .chat-main {
+        min-height: 100vh;
+        height: auto;
+    }
+
+    .chat-container {
+        padding: 10px 16px 18px;
+    }
+
+    .chat-header {
+        padding: 14px 16px;
+    }
+
+    .message-content {
+        max-width: 100%;
+        font-size: 15px;
+    }
+
+    .composer-shell {
+        padding: 0 12px 16px;
+    }
+
+    .chat-main:not(.is-chatting) .composer-shell {
+        top: calc(50% + 24px);
+        padding: 0 12px;
+    }
+
+    .input-wrapper {
+        padding: 12px;
+        border-radius: 20px;
+    }
+
+    .input-wrapper textarea {
+        font-size: 15px;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
