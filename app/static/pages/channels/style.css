@@ -336,6 +336,46 @@ tbody tr:hover {
     font-family: "Cascadia Code", Consolas, monospace;
 }
 
+.key-cell {
+    max-width: 260px;
+}
+
+.key-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.key-wrap .mono {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.key-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.key-btn:hover {
+    background: var(--bg-sidebar-hover);
+    color: var(--accent);
+}
+
+.key-btn.copied {
+    color: var(--green, #35d399);
+}
+
 .status-pill,
 .model-chip,
 .group-pill {

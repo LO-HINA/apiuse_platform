@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.append(
             cell(channel.id, 'mono'),
             cell(channel.name),
-            cell(channel.api_key_masked, 'mono'),
+            keyCell(channel),
             cell(channel.base_url, 'mono'),
             modelCell(channel.models || []),
             groupCell(channel.group || 'default'),
@@ -508,6 +508,49 @@ document.addEventListener('DOMContentLoaded', () => {
         const td = document.createElement('td');
         td.textContent = text || '-';
         if (className) td.className = className;
+        return td;
+    }
+
+    function keyCell(channel) {
+        const td = document.createElement('td');
+        td.className = 'key-cell';
+        const wrap = document.createElement('div');
+        wrap.className = 'key-wrap';
+
+        const span = document.createElement('span');
+        span.className = 'mono';
+        span.textContent = channel.api_key_masked;
+
+        const btn = document.createElement('button');
+        btn.className = 'key-btn';
+        btn.type = 'button';
+        btn.title = '查看完整密钥';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+        let fullKey = '';
+        btn.addEventListener('click', async () => {
+            if (fullKey) {
+                try {
+                    await navigator.clipboard.writeText(fullKey);
+                    btn.classList.add('copied');
+                    setTimeout(() => btn.classList.remove('copied'), 1200);
+                } catch { /* clip not available */ }
+                return;
+            }
+            try {
+                const data = await api(`/api/admin/channels/${channel.id}/key`);
+                fullKey = data.key;
+                span.textContent = fullKey;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+                btn.title = '复制密钥';
+                await navigator.clipboard.writeText(fullKey);
+                btn.classList.add('copied');
+                setTimeout(() => btn.classList.remove('copied'), 1200);
+            } catch { /* ignore */ }
+        });
+
+        wrap.append(span, btn);
+        td.appendChild(wrap);
         return td;
     }
 

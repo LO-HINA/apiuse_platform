@@ -70,6 +70,17 @@ async def create_channel(
         )
 
 
+@router.get("/{channel_id}/key")
+async def get_channel_key(
+    channel_id: str,
+    _admin: Annotated[UserRecord, Depends(get_admin_user)],
+) -> dict:
+    channel = await crud.get(channel_id)
+    if channel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="channel not found")
+    return {"key": channel.api_key}
+
+
 @router.post("/bulk-import", response_model=ChannelBulkImportResponse)
 async def bulk_import_channels(
     payload: ChannelBulkImportRequest,
