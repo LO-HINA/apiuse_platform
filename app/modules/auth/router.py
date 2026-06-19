@@ -11,17 +11,25 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_current_user
 from app.modules.auth.schemas import (
+    AuthStatusResponse,
     LoginRequest,
     RegisterRequest,
     TokenResponse,
     UserResponse,
 )
 from app.modules.auth import service as auth_service
-from app.storage import UserRecord
+from app.storage import UserRecord, user_repo
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.get("/status", response_model=AuthStatusResponse)
+async def auth_status() -> AuthStatusResponse:
+    """公开端点,返回系统是否存在用户。"""
+    count = await user_repo.count()
+    return AuthStatusResponse(has_users=count > 0)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)

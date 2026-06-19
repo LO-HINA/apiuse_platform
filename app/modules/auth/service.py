@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.modules.auth import crud as auth_crud
 from app.modules.auth.schemas import TokenResponse
-from app.storage import UserRecord
+from app.storage import UserRecord, user_repo
 
 
 async def register_user(
@@ -18,14 +18,17 @@ async def register_user(
     password: str,
     display_name: str | None = None,
 ) -> TokenResponse:
-    """创建普通用户并直接签发 token。
+    """创建用户并直接签发 token。
 
+    系统无用户时自动设为 admin 角色。
     username 重复时 auth_crud 会抛 ValueError,router 负责翻成 409。
     """
+    role = "admin" if await user_repo.count() == 0 else "user"
     user = await auth_crud.create_user(
         username=username,
         password=password,
         display_name=display_name,
+        role=role,
     )
     return issue_token(user)
 

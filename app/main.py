@@ -18,6 +18,7 @@ from app.core.middleware import RequestIDMiddleware
 from app.modules.ai_providers.service import set_http_client
 from app.modules.auth.router import router as auth_router
 from app.modules.channels import crud as channels_crud
+from app.modules.channels.router import router as channels_router
 from app.modules.channels.service import load_channels
 from app.modules.chat.router import router as chat_router
 from app.modules.chat.schemas import HealthResponse
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_FILE = STATIC_DIR / "pages" / "chat" / "index.html"
+CHANNELS_FILE = STATIC_DIR / "pages" / "channels" / "index.html"
+AUTH_FILE = STATIC_DIR / "pages" / "auth" / "index.html"
 
 
 # ----------------------------------------------------------------------
@@ -97,6 +100,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth_router)
 app.include_router(sessions_router)
 app.include_router(chat_router)
+app.include_router(channels_router)
 
 
 # ----------------------------------------------------------------------
@@ -106,6 +110,17 @@ app.include_router(chat_router)
 @app.get("/", include_in_schema=False)
 async def index():
     return FileResponse(INDEX_FILE)
+
+
+@app.get("/channels", include_in_schema=False)
+async def channels_page():
+    return FileResponse(CHANNELS_FILE)
+
+
+@app.get("/login", include_in_schema=False)
+@app.get("/register", include_in_schema=False)
+async def auth_page():
+    return FileResponse(AUTH_FILE)
 
 
 @app.get("/health", response_model=HealthResponse)

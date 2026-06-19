@@ -6,6 +6,11 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
+class AuthStatusResponse(BaseModel):
+    """公开状态:系统是否有用户。"""
+    has_users: bool
+
+
 class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=64)
     password: SecretStr = Field(..., min_length=8, max_length=128)

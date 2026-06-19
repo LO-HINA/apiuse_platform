@@ -245,6 +245,9 @@ class UserRepo:
     async def get(self, user_id: str) -> Optional[UserRecord]:
         return self._users.get(user_id)
 
+    async def count(self) -> int:
+        return len(self._users)
+
     async def get_by_username(self, username: str) -> Optional[UserRecord]:
         uid = self._by_username.get(username)
         return self._users.get(uid) if uid else None
