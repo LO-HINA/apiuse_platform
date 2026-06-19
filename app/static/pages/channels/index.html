@@ -169,14 +169,13 @@
 
                     <label>
                         <span>模型 <b>*</b></span>
-                        <select id="channel-model" name="model" required>
-                            <option value="">加载中...</option>
-                        </select>
+                        <input id="channel-model" name="model" type="text" placeholder="gpt-4o-mini" autocomplete="off" list="model-suggestions" required>
+                        <datalist id="model-suggestions"></datalist>
                     </label>
 
                     <label>
-                        <span>自定义模型名称</span>
-                        <input id="channel-custom-model" name="custom_model_name" type="text" placeholder="my-model" autocomplete="off">
+                        <span>自定义模型</span>
+                        <input id="channel-custom-model" name="custom_model_name" type="text" placeholder="my-model，额外模型名" autocomplete="off">
                     </label>
 
                     <label>

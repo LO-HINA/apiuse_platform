@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return null;
         }
         if (!selectedModel) {
-            showNotice('请选择模型。', true);
+            showNotice('请填写模型名称。', true);
             el.model.focus();
             return null;
         }
@@ -293,16 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderModelOptions() {
-        const current = el.model.value;
-        el.model.innerHTML = '';
-        appendOption(el.model, '', '请选择模型');
+        const datalist = document.getElementById('model-suggestions');
+        datalist.innerHTML = '';
         for (const model of state.modelOptions) {
-            appendOption(el.model, model, model);
-        }
-        if (current && state.modelOptions.includes(current)) {
-            el.model.value = current;
-        } else {
-            el.model.value = state.modelOptions[0] || '';
+            const opt = document.createElement('option');
+            opt.value = model;
+            datalist.appendChild(opt);
         }
     }
 
