@@ -477,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
             td.className = 'empty-row';
-            td.colSpan = 8;
+            td.colSpan = 7;
             td.textContent = state.channels.length ? '没有匹配的账号。' : '还没有账号，先添加或批量导入。';
             tr.appendChild(td);
             el.tbody.appendChild(tr);
@@ -498,8 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cell(channel.base_url, 'mono'),
             modelCell(channel.models || []),
             groupCell(channel.group || 'default'),
-            statusCell(channel.enabled),
-            cell(`${channel.success_count || 0}/${channel.failure_count || 0}`, 'mono')
+            statusCell(channel.enabled)
         );
         return tr;
     }
@@ -524,34 +523,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const btn = document.createElement('button');
         btn.className = 'key-btn';
         btn.type = 'button';
-        btn.title = '查看完整密钥';
-        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        btn.title = '复制密钥';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 
         let fullKey = '';
         btn.addEventListener('click', async () => {
             if (fullKey) {
-                try {
-                    await navigator.clipboard.writeText(fullKey);
-                    btn.classList.add('copied');
-                    setTimeout(() => btn.classList.remove('copied'), 1200);
-                } catch { /* clip not available */ }
+                await copy(fullKey, btn);
                 return;
             }
             try {
                 const data = await api(`/api/admin/channels/${channel.id}/key`);
                 fullKey = data.key;
-                span.textContent = fullKey;
-                btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-                btn.title = '复制密钥';
-                await navigator.clipboard.writeText(fullKey);
-                btn.classList.add('copied');
-                setTimeout(() => btn.classList.remove('copied'), 1200);
+                await copy(fullKey, btn);
             } catch { /* ignore */ }
         });
 
         wrap.append(span, btn);
         td.appendChild(wrap);
         return td;
+    }
+
+    async function copy(text, btn) {
+        try {
+            await navigator.clipboard.writeText(text);
+            btn.classList.add('copied');
+            setTimeout(() => btn.classList.remove('copied'), 1200);
+        } catch { /* clip not available */ }
     }
 
     function modelCell(models) {
