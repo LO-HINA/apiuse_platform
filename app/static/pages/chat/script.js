@@ -261,132 +261,76 @@ document.addEventListener('DOMContentLoaded', () => {
         showStatus();
 
         const params = new URLSearchParams({ message: userMessage });
-        if (currentSessionId) {
-            params.set('session_id', currentSessionId);
-        }
-        if (selectedModel) {
-            params.set('model', selectedModel);
-        }
+        if (currentSessionId) params.set('session_id', currentSessionId);
+        if (selectedModel) params.set('model', selectedModel);
 
         const controller = new AbortController();
         currentStreamController = controller;
         sendBtn.disabled = true;
 
-        let buffer = '';
-        let doneByProtocol = false;
+        let buf = '';
+        let protocolDone = false;
+
+        function drain(flush) {
+            const parts = buf.split(/\r?\n\r?\n/);
+            buf = flush ? '' : parts.pop() || '';
+            for (const f of parts) { if (handle(f)) return true; }
+            if (flush && buf.trim()) return handle(buf);
+            return false;
+        }
+
+        function handle(frame) {
+            const data = frame.split(/\r?\n/).filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n').trim();
+            if (!data) return false;
+            if (data === '[DONE]') return true;
+            let p;
+            try { p = JSON.parse(data); } catch {
+                aiContentNode.textContent += data; scrollToBottom(); return false;
+            }
+            if (typeof p.session_id === 'string') currentSessionId = p.session_id;
+            else if (typeof p.token === 'string') { aiContentNode.textContent += p.token; scrollToBottom(); }
+            else if (typeof p.error === 'string') { aiContentNode.textContent += `\n[错误] ${p.error}`; scrollToBottom(); }
+            return false;
+        }
 
         try {
             const token = getAccessToken();
-            if (!token) {
-                window.location.href = '/login';
-                return;
-            }
+            if (!token) { window.location.href = '/login'; return; }
 
-            const response = await fetch(`/api/chat/stream?${params.toString()}`, {
-                method: 'GET',
-                headers: {
-                    Accept: 'text/event-stream',
-                    Authorization: `Bearer ${token}`,
-                },
+            const res = await fetch(`/api/chat/stream?${params.toString()}`, {
+                headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}` },
                 signal: controller.signal,
             });
 
-            if (response.status === 401) {
-                clearAccessToken();
-                window.location.href = '/login';
-                return;
-            }
+            if (res.status === 401) { clearAccessToken(); window.location.href = '/login'; return; }
+            if (!res.ok || !res.body) throw new Error(await responseErrorMessage(res));
 
-            if (!response.ok || !response.body) {
-                throw new Error(await responseErrorMessage(response));
-            }
+            const reader = res.body.getReader();
+            const dec = new TextDecoder();
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (!doneByProtocol) {
+            while (!protocolDone) {
                 const { value, done } = await reader.read();
                 if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                doneByProtocol = drainSseFrames(false);
+                buf += dec.decode(value, { stream: true });
+                protocolDone = drain(false);
             }
 
-            buffer += decoder.decode();
-            if (!doneByProtocol) {
-                drainSseFrames(true);
-            }
+            buf += dec.decode();
+            if (!protocolDone) drain(true);
+
         } catch (err) {
-            if (err.name === 'AbortError') {
-                return;
-            }
+            if (err.name === 'AbortError') return;
             console.error('chat stream failed', err);
-            const message = err instanceof Error && err.message ? err.message : '连接出错，请稍后重试';
-            if (!aiContentNode.textContent) {
-                aiContentNode.textContent = `[${message}]`;
-            } else {
-                aiContentNode.textContent += `\n[${message}]`;
-            }
+            const msg = err instanceof Error && err.message ? err.message : '连接出错，请稍后重试';
+            if (!aiContentNode.textContent) aiContentNode.textContent = `[${msg}]`;
+            else aiContentNode.textContent += `\n[${msg}]`;
             scrollToBottom();
-        } finally {
-            closeStream();
         }
 
-        function drainSseFrames(flushRest) {
-            const frames = buffer.split(/\r?\n\r?\n/);
-            buffer = flushRest ? '' : frames.pop() || '';
-
-            for (const frame of frames) {
-                if (handleSseFrame(frame)) {
-                    return true;
-                }
-            }
-
-            if (flushRest && buffer.trim()) {
-                return handleSseFrame(buffer);
-            }
-            return false;
-        }
-
-        function handleSseFrame(frame) {
-            const data = frame
-                .split(/\r?\n/)
-                .filter((line) => line.startsWith('data:'))
-                .map((line) => line.slice(5).trimStart())
-                .join('\n')
-                .trim();
-
-            if (!data) return false;
-            if (data === '[DONE]') return true;
-
-            let payload;
-            try {
-                payload = JSON.parse(data);
-            } catch (err) {
-                aiContentNode.textContent += data;
-                scrollToBottom();
-                return false;
-            }
-
-            if (typeof payload.session_id === 'string') {
-                currentSessionId = payload.session_id;
-            } else if (typeof payload.token === 'string') {
-                aiContentNode.textContent += payload.token;
-                scrollToBottom();
-            } else if (typeof payload.error === 'string') {
-                aiContentNode.textContent += `\n[错误] ${payload.error}`;
-                scrollToBottom();
-            }
-            return false;
-        }
-
-        function closeStream() {
-            if (currentStreamController === controller) {
-                currentStreamController = null;
-            }
-            sendBtn.disabled = false;
-            hideStatus();
-            messageInput.focus();
-        }
+        if (currentStreamController === controller) currentStreamController = null;
+        sendBtn.disabled = false;
+        hideStatus();
+        messageInput.focus();
     }
 
     function showStatus() {
