@@ -1,3 +1,5 @@
+![访问计数](https://count.getloli.com/@apiuse_platform?name=apiuse_platform&theme=miku&padding=7&offset=0&align=center&scale=0.3&pixelated=1&darkmode=auto)
+
 # API Pool Test Platform
 
 本项目最初参考 new-api 的多渠道号池设计，目标是实现统一的 AI 中转与账号调度能力。new-api 主要面向标准 OpenAI、Anthropic 及 OpenAI-compatible API Key 场景，优点是请求格式统一、调用方式清晰、生态兼容性强。
