@@ -1,6 +1,12 @@
 # API Pool Test Platform
 
-OpenAI 兼容协议的简化号池中转平台,用于测试和验证多上游 API Key 的可用性、调度策略与故障转移行为。
+本项目最初参考 new-api 的多渠道号池设计，目标是实现统一的 AI 中转与账号调度能力。new-api 主要面向标准 OpenAI、Anthropic 及 OpenAI-compatible API Key 场景，优点是请求格式统一、调用方式清晰、生态兼容性强。
+
+但在实际开发和使用过程中，很多 AI 账号并不具备标准 API Key 形式，或者虽然可以调用模型能力，却需要特殊的鉴权方式、请求结构、会话状态、token 刷新逻辑或响应解析方式。例如 GitHub 上的 CLIProxyAPI、kiro.rs、grok2api 等项目，分别针对 CLI/OAuth 账号、Kiro 凭据、Grok Web 账号等场景实现了专门的请求适配。
+
+因此，本项目在传统 Channel Pool 的基础上进一步抽象出 Provider Adapter 层，将“账号调度”和“请求适配”解耦。号池层负责用户鉴权、模型映射、渠道选择、失败切换、状态管理；Provider Adapter 层负责不同账号类型的鉴权、请求转换、流式处理、错误归一化和响应兼容。
+
+通过这种设计，平台不仅可以支持标准 OpenAI/Anthropic API Key，也具备扩展到更多非标准账号形态和 Provider 类型的能力，从而提高账号接入灵活性与系统扩展性。
 
 灵感来源 One API / New API,但只做 **号池调度 + 测试可视化**,不做计费 / 配额 / 虚拟 key 转发。当前是个人学习项目,但按企业级目录约定写——领域分层、依赖单向、模块自治。
 
