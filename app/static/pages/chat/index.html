@@ -113,6 +113,71 @@
         </main>
     </div>
 
-    <script src="/static/pages/chat/script.js?v=2"></script>
+    <script>
+// 鉴权守卫: 没有 token 跳登录页
+(function(){if(!function(){return localStorage.getItem('access_token')||localStorage.getItem('token')||''}())window.location.href='/login'})();
+function getAccessToken(){return localStorage.getItem('access_token')||localStorage.getItem('token')||''}
+document.addEventListener('DOMContentLoaded',()=>{
+const E={chatMain:G('chat-main'),container:G('chat-container'),input:G('message-input'),sendBtn:G('send-btn'),status:G('status-indicator'),newChat:G('new-chat-btn'),form:G('composer-form')}
+let ctrl=null,sid=null,model=null,models=[]
+const logout=G('logout-btn');if(logout)logout.addEventListener('click',()=>{clearToken();window.location.href='/login'})
+loadUser();initModel()
+async function initModel(){const btn=G('model-selector-btn'),dd=G('model-dropdown'),ml=G('model-list'),tx=G('model-selector-text');if(!btn||!dd||!ml)return
+try{const r=await fetch('/api/channels/models');if(!r.ok)throw 0;models=await r.json()}catch{tx.textContent='无可用模型';return}
+const fa=models.find(m=>m.available);if(fa){model=fa.model;tx.textContent=model}else{tx.textContent=models.length?'无可用模型':'选择模型'}
+render();btn.addEventListener('click',e=>{e.stopPropagation();if(dd.hidden){render();dd.hidden=!1;btn.setAttribute('aria-expanded','1')}else{dd.hidden=!0;btn.setAttribute('aria-expanded','0')}})
+document.addEventListener('click',e=>{const w=G('model-selector-wrapper');if(!w.contains(e.target)){dd.hidden=!0;btn.setAttribute('aria-expanded','0')}})
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!dd.hidden){dd.hidden=!0;btn.setAttribute('aria-expanded','0');btn.focus()}})}
+function render(){const ml=G('model-list'),tx=G('model-selector-text');if(!ml)return
+if(!models.length){ml.innerHTML='<div class="model-empty">暂无可用模型</div>';return}
+ml.innerHTML='';for(const m of models){const b=document.createElement('button');b.type='button';b.className='model-item'
+if(!m.available)b.classList.add('disabled');if(m.model===model)b.classList.add('selected')
+const c=document.createElement('span');c.className='model-check';c.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+const n=document.createElement('span');n.className='model-name';n.textContent=m.model
+const s=document.createElement('span');s.className='model-channel';s.textContent=m.channel_name
+b.append(c,n,s)
+if(!m.available)b.title='该账号当前不可用';else b.addEventListener('click',()=>{model=m.model;if(tx)tx.textContent=model;G('model-dropdown').hidden=!0;G('model-selector-btn').setAttribute('aria-expanded','0');render()})
+ml.appendChild(b)}}
+async function loadUser(){const t=getAccessToken();if(!t)return
+try{const r=await fetch('/api/auth/me',{headers:{Authorization:`Bearer ${t}`}})
+if(!r.ok){clearToken();window.location.href='/login';return}
+const u=await r.json(),ne=G('user-name'),ae=G('user-avatar')
+if(ne)ne.textContent=u.display_name||u.username;if(ae)ae.textContent=(u.display_name||u.username).charAt(0).toUpperCase()}catch{}}
+E.input.addEventListener('input',()=>{E.input.style.height='auto';E.input.style.height=Math.min(E.input.scrollHeight,200)+'px'})
+E.input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}})
+E.form.addEventListener('submit',e=>{e.preventDefault();send()})
+if(E.newChat)E.newChat.addEventListener('click',reset)
+function send(){const t=E.input.value.trim();if(!t||ctrl)return;E.chatMain.classList.add('is-chatting');append('user',t);E.input.value='';stream(t)}
+function append(r,t){const d=document.createElement('div');d.className=`message ${r}-message`
+const a=document.createElement('div');a.className='avatar';a.textContent=r==='user'?'Me':'AI'
+const c=document.createElement('div');c.className='message-content';c.textContent=t
+d.append(a,c);E.container.appendChild(d);scroll();return c}
+function scroll(){E.container.scrollTop=E.container.scrollHeight}
+function reset(){if(ctrl){ctrl.abort();ctrl=null};sid=null;E.container.innerHTML='';E.chatMain.classList.remove('is-chatting');E.sendBtn.disabled=!1;hideStatus();E.input.value=''}
+function showStatus(){if(E.status)E.status.style.display='flex'}
+function hideStatus(){if(E.status)E.status.style.display='none'}
+function clearToken(){localStorage.removeItem('access_token');localStorage.removeItem('token')}
+function G(id){return document.getElementById(id)}
+async function stream(msg){const node=append('ai','');showStatus()
+const p=new URLSearchParams({message:msg});if(sid)p.set('session_id',sid);if(model)p.set('model',model)
+const ac=new AbortController();ctrl=ac;E.sendBtn.disabled=!0
+let buf='',done=!1
+function dr(fl){const ps=buf.split(/\r?\n\r?\n/);buf=fl?'':ps.pop()||'';for(const f of ps){if(hd(f))return 1}if(fl&&buf.trim())return hd(buf);return 0}
+function hd(f){const d=f.split(/\r?\n/).filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trim()).join('\n').trim();if(!d)return 0;if(d==='[DONE]')return 1
+let p;try{p=JSON.parse(d)}catch{node.textContent+=d;scroll();return 0}
+if(typeof p.session_id==='string')sid=p.session_id;else if(typeof p.token==='string'){node.textContent+=p.token;scroll()}else if(typeof p.error==='string'){node.textContent+=`\n[错误] ${p.error}`;scroll()};return 0}
+try{const t=getAccessToken();if(!t){window.location.href='/login';return}
+const r=await fetch(`/api/chat/stream?${p}`,{headers:{Accept:'text/event-stream',Authorization:`Bearer ${t}`},signal:ac.signal})
+if(r.status===401){clearToken();window.location.href='/login';return}
+if(!r.ok||!r.body)throw new Error(await errMsg(r))
+const rd=r.body.getReader(),dc=new TextDecoder()
+while(!done){const{value,done:br}=await rd.read();if(br)break;buf+=dc.decode(value,{stream:true});done=dr(!1)}
+buf+=dc.decode();if(!done)dr(!0)}catch(e){if(e.name==='AbortError')return;console.error('stream err',e)
+const m=e instanceof Error&&e.message?e.message:'连接出错';if(!node.textContent)node.textContent=`[${m}]`;else node.textContent+=`\n[${m}]`;scroll()}
+if(ctrl===ac)ctrl=null;E.sendBtn.disabled=!1;hideStatus();E.input.focus()}
+async function errMsg(r){try{const ct=r.headers.get('content-type')||'',fb=`请求失败: ${r.status}`;if(ct.includes('json')){const d=await r.json();return d.message||d.detail||fb}
+const t=await r.text();return t?`${fb} ${t.slice(0,160)}`:fb}catch{return`请求失败: ${r.status}`}}
+})
+</script>
 </body>
 </html>
