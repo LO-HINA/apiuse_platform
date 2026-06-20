@@ -1,9 +1,13 @@
 // 鉴权守卫: 没有 token 跳登录页
 (function authGuard() {
-    if (!localStorage.getItem('access_token')) {
+    if (!getAccessToken()) {
         window.location.href = '/login';
     }
 })();
+
+function getAccessToken() {
+    return localStorage.getItem('access_token') || localStorage.getItem('token') || '';
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     const chatMain = document.getElementById('chat-main');
@@ -14,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const newChatBtn = document.getElementById('new-chat-btn');
     const composerForm = document.getElementById('composer-form');
 
-    let currentEventSource = null;
+    let currentStreamController = null;
     let currentSessionId = null;
     let selectedModel = null;
     let availableModels = [];
@@ -23,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            localStorage.removeItem('access_token');
+            clearAccessToken();
             window.location.href = '/login';
         });
     }
@@ -154,14 +158,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadUserInfo() {
-        const token = localStorage.getItem('access_token');
+        const token = getAccessToken();
         if (!token) return;
         try {
             const res = await fetch('/api/auth/me', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) {
-                localStorage.removeItem('access_token');
+                clearAccessToken();
                 window.location.href = '/login';
                 return;
             }
@@ -204,9 +208,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function resetChat() {
-        if (currentEventSource) {
-            currentEventSource.close();
-            currentEventSource = null;
+        if (currentStreamController) {
+            currentStreamController.abort();
+            currentStreamController = null;
         }
 
         currentSessionId = null;
@@ -221,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function sendMessage() {
         const text = messageInput.value.trim();
-        if (!text || currentEventSource) return;
+        if (!text || currentStreamController) return;
 
         enterChatMode();
         appendMessage('user', text);
@@ -252,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    function streamAIResponse(userMessage) {
+    async function streamAIResponse(userMessage) {
         const aiContentNode = appendMessage('ai', '');
         showStatus();
 
@@ -264,55 +268,121 @@ document.addEventListener('DOMContentLoaded', () => {
             params.set('model', selectedModel);
         }
 
-        const eventSource = new EventSource(`/api/chat/stream?${params.toString()}`);
-        currentEventSource = eventSource;
+        const controller = new AbortController();
+        currentStreamController = controller;
         sendBtn.disabled = true;
 
-        eventSource.onmessage = (event) => {
-            if (event.data === '[DONE]') {
-                closeStream();
+        let buffer = '';
+        let doneByProtocol = false;
+
+        try {
+            const token = getAccessToken();
+            if (!token) {
+                window.location.href = '/login';
                 return;
             }
 
+            const response = await fetch(`/api/chat/stream?${params.toString()}`, {
+                method: 'GET',
+                headers: {
+                    Accept: 'text/event-stream',
+                    Authorization: `Bearer ${token}`,
+                },
+                signal: controller.signal,
+            });
+
+            if (response.status === 401) {
+                clearAccessToken();
+                window.location.href = '/login';
+                return;
+            }
+
+            if (!response.ok || !response.body) {
+                throw new Error(await responseErrorMessage(response));
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (!doneByProtocol) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                doneByProtocol = drainSseFrames(false);
+            }
+
+            buffer += decoder.decode();
+            if (!doneByProtocol) {
+                drainSseFrames(true);
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                return;
+            }
+            console.error('chat stream failed', err);
+            const message = err instanceof Error && err.message ? err.message : '连接出错，请稍后重试';
+            if (!aiContentNode.textContent) {
+                aiContentNode.textContent = `[${message}]`;
+            } else {
+                aiContentNode.textContent += `\n[${message}]`;
+            }
+            scrollToBottom();
+        } finally {
+            closeStream();
+        }
+
+        function drainSseFrames(flushRest) {
+            const frames = buffer.split(/\r?\n\r?\n/);
+            buffer = flushRest ? '' : frames.pop() || '';
+
+            for (const frame of frames) {
+                if (handleSseFrame(frame)) {
+                    return true;
+                }
+            }
+
+            if (flushRest && buffer.trim()) {
+                return handleSseFrame(buffer);
+            }
+            return false;
+        }
+
+        function handleSseFrame(frame) {
+            const data = frame
+                .split(/\r?\n/)
+                .filter((line) => line.startsWith('data:'))
+                .map((line) => line.slice(5).trimStart())
+                .join('\n')
+                .trim();
+
+            if (!data) return false;
+            if (data === '[DONE]') return true;
+
             let payload;
             try {
-                payload = JSON.parse(event.data);
+                payload = JSON.parse(data);
             } catch (err) {
-                aiContentNode.textContent += event.data;
+                aiContentNode.textContent += data;
                 scrollToBottom();
-                return;
+                return false;
             }
 
             if (typeof payload.session_id === 'string') {
                 currentSessionId = payload.session_id;
-                return;
-            }
-
-            if (typeof payload.token === 'string') {
+            } else if (typeof payload.token === 'string') {
                 aiContentNode.textContent += payload.token;
                 scrollToBottom();
-                return;
-            }
-
-            if (typeof payload.error === 'string') {
+            } else if (typeof payload.error === 'string') {
                 aiContentNode.textContent += `\n[错误] ${payload.error}`;
                 scrollToBottom();
             }
-        };
-
-        eventSource.onerror = () => {
-            if (eventSource.readyState !== EventSource.CLOSED) {
-                return;
-            }
-            if (!aiContentNode.textContent) {
-                aiContentNode.textContent = '[连接出错，请稍后重试]';
-            }
-            closeStream();
-        };
+            return false;
+        }
 
         function closeStream() {
-            eventSource.close();
-            currentEventSource = null;
+            if (currentStreamController === controller) {
+                currentStreamController = null;
+            }
             sendBtn.disabled = false;
             hideStatus();
             messageInput.focus();
@@ -328,6 +398,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideStatus() {
         if (statusIndicator) {
             statusIndicator.style.display = 'none';
+        }
+    }
+
+    function clearAccessToken() {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('token');
+    }
+
+    async function responseErrorMessage(response) {
+        const fallback = `请求失败: ${response.status}`;
+        const contentType = response.headers.get('content-type') || '';
+        try {
+            if (contentType.includes('application/json')) {
+                const data = await response.json();
+                return data?.message || data?.detail || fallback;
+            }
+            const text = await response.text();
+            return text ? `${fallback} ${text.slice(0, 160)}` : fallback;
+        } catch (err) {
+            return fallback;
         }
     }
 });
