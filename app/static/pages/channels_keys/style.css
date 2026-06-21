@@ -305,6 +305,54 @@ tbody tr:hover {
     font-size: 13px;
 }
 
+.key-wrap .reveal-btn {
+    font-size: 14px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 4px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.key-wrap .reveal-btn:hover {
+    background: var(--bg-sidebar-hover);
+    color: var(--accent);
+}
+
+.key-wrap .copy-key-btn {
+    font-size: 14px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 4px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.key-wrap .copy-key-btn:hover {
+    background: var(--bg-sidebar-hover);
+    color: var(--accent);
+}
+
+.key-wrap .copy-key-btn.copied {
+    color: var(--green, #35d399);
+}
+
 .key-btn {
     flex-shrink: 0;
     width: 28px;

@@ -197,7 +197,38 @@ document.addEventListener('DOMContentLoaded', function () {
         var span = document.createElement('span');
         span.className = 'mono';
         span.textContent = key.key_masked;
+        span.setAttribute('data-key-id', key.id);
+        span.setAttribute('data-revealed', 'false');
         wrap.appendChild(span);
+
+        var eyeBtn = document.createElement('button');
+        eyeBtn.type = 'button';
+        eyeBtn.className = 'ghost-btn icon-btn reveal-btn';
+        eyeBtn.title = '查看密钥';
+        eyeBtn.innerHTML = '&#128065;';
+        (function (kId, sp) {
+            eyeBtn.addEventListener('click', function () { revealKey(kId, sp, eyeBtn); });
+        })(key.id, span);
+        wrap.appendChild(eyeBtn);
+
+        var copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'ghost-btn icon-btn copy-key-btn';
+        copyBtn.title = '复制密钥';
+        copyBtn.innerHTML = '&#128203;';
+        copyBtn.hidden = true;
+        (function (sp, btn) {
+            copyBtn.addEventListener('click', function () {
+                var text = sp.textContent;
+                if (!text || sp.getAttribute('data-revealed') !== 'true') return;
+                navigator.clipboard.writeText(text).then(function () {
+                    btn.classList.add('copied');
+                    setTimeout(function () { btn.classList.remove('copied'); }, 1200);
+                }).catch(function () {});
+            });
+        })(span, copyBtn);
+        wrap.appendChild(copyBtn);
+
         tdKey.appendChild(wrap);
 
         var tdName = document.createElement('td');
@@ -418,6 +449,33 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotice('密钥已删除。');
         } catch (err) {
             showNotice(err.message, true);
+        }
+    }
+
+    async function revealKey(keyId, spanEl, eyeBtnEl) {
+        var isRevealed = spanEl.getAttribute('data-revealed') === 'true';
+        if (isRevealed) {
+            var row = spanEl.closest('tr');
+            var keyData = keys.find(function (k) { return k.id === keyId; });
+            spanEl.textContent = keyData ? keyData.key_masked : '***';
+            spanEl.setAttribute('data-revealed', 'false');
+            eyeBtnEl.title = '查看密钥';
+            var copyBtn = spanEl.parentElement.querySelector('.copy-key-btn');
+            if (copyBtn) copyBtn.hidden = true;
+            return;
+        }
+        eyeBtnEl.disabled = true;
+        try {
+            var result = await api('/api/keys/' + keyId + '/reveal', { method: 'POST' });
+            spanEl.textContent = result.key;
+            spanEl.setAttribute('data-revealed', 'true');
+            eyeBtnEl.title = '隐藏密钥';
+            var copyBtn = spanEl.parentElement.querySelector('.copy-key-btn');
+            if (copyBtn) copyBtn.hidden = false;
+        } catch (err) {
+            showNotice('查看密钥失败: ' + err.message, true);
+        } finally {
+            eyeBtnEl.disabled = false;
         }
     }
 
