@@ -253,11 +253,8 @@ async def stream_chat_completion(request: ChatCompletionRequest) -> AsyncGenerat
                         model=upstream_model,
                         choices=relay_choices,
                     )
-                    frame = f"data: {relay_chunk.model_dump_json()}\n\n"
-                    if not emitted:
-                        logger.info("relay stream first chunk: %s", frame[:200])
                     emitted = True
-                    yield frame
+                    yield f"data: {relay_chunk.model_dump_json()}\n\n"
 
             await channels_service.mark_success(channel)
             logger.info("relay stream done: channel=%s", channel.safe_label())
