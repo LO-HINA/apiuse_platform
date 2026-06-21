@@ -1,4 +1,3 @@
-// 鉴权守卫: 没有 token 跳登录页
 (function () {
     if (!(localStorage.getItem('access_token') || localStorage.getItem('token'))) {
         window.location.href = '/login';
@@ -6,7 +5,6 @@
 })();
 
 document.addEventListener('DOMContentLoaded', function () {
-    // Render shared sidebar
     renderSidebar({
         activePath: '/channels/usage',
         showHistory: false,
@@ -16,65 +14,102 @@ document.addEventListener('DOMContentLoaded', function () {
         showUserFooter: false,
     });
 
-    // ── Mock data ──
-    var mockUsageData = [
-        { date: '2026-06-20', model: 'gpt-4o-mini', requests: 523, input_tokens: 45230, output_tokens: 12340 },
-        { date: '2026-06-20', model: 'gpt-4o', requests: 156, input_tokens: 28900, output_tokens: 5670 },
-        { date: '2026-06-19', model: 'gpt-4o-mini', requests: 487, input_tokens: 39120, output_tokens: 10890 },
-        { date: '2026-06-19', model: 'deepseek-chat', requests: 234, input_tokens: 34500, output_tokens: 8900 },
-        { date: '2026-06-18', model: 'gpt-4o-mini', requests: 612, input_tokens: 51200, output_tokens: 15670 },
-        { date: '2026-06-18', model: 'gpt-4o', requests: 98, input_tokens: 18300, output_tokens: 3450 },
-        { date: '2026-06-17', model: 'gpt-4o-mini', requests: 445, input_tokens: 38700, output_tokens: 10230 },
-        { date: '2026-06-17', model: 'deepseek-chat', requests: 312, input_tokens: 42100, output_tokens: 12340 },
-        { date: '2026-06-16', model: 'gpt-4o-mini', requests: 378, input_tokens: 30100, output_tokens: 8760 },
-        { date: '2026-06-16', model: 'gpt-4o', requests: 167, input_tokens: 31200, output_tokens: 6540 },
-    ];
-
     var el = {
         tbody: document.getElementById('usage-tbody'),
         modelFilter: document.getElementById('model-filter'),
         refreshBtn: document.getElementById('refresh-btn'),
+        chartCanvas: document.getElementById('usage-chart'),
     };
 
+    var chartTooltip = document.createElement('div');
+    chartTooltip.className = 'chart-tooltip';
+    el.chartCanvas.parentElement.appendChild(chartTooltip);
+
+    var dailyData = [];
+    var detailData = [];
+
     bindEvents();
-    renderUsage();
+    loadModels();
+    loadUsage();
 
     function bindEvents() {
-        el.modelFilter.addEventListener('change', renderUsage);
+        el.modelFilter.addEventListener('change', loadUsage);
         el.refreshBtn.addEventListener('click', function () {
-            renderUsage();
+            loadUsage();
             showNotice('数据已刷新。');
         });
     }
 
-    function renderUsage() {
-        var filterModel = el.modelFilter.value;
-        var filtered = filterModel
-            ? mockUsageData.filter(function (row) { return row.model === filterModel; })
-            : mockUsageData;
+    function apiFetch(path) {
+        var token = localStorage.getItem('access_token') || localStorage.getItem('token');
+        return fetch(path, {
+            headers: { 'Authorization': 'Bearer ' + token },
+        }).then(function (r) {
+            if (r.status === 401) {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+                return Promise.reject(new Error('unauthorized'));
+            }
+            return r.json();
+        });
+    }
 
-        // Calculate stats
-        var totalRequests = 0;
-        var todayRequests = 0;
-        var monthRequests = 0;
-        var today = '2026-06-20';
-        var monthStart = '2026-06-01';
+    function loadModels() {
+        apiFetch('/api/usage/models').then(function (models) {
+            var current = el.modelFilter.value;
+            el.modelFilter.innerHTML = '<option value="">全部模型</option>';
+            models.forEach(function (m) {
+                var opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                el.modelFilter.appendChild(opt);
+            });
+            el.modelFilter.value = current;
+        }).catch(function () {});
+    }
 
-        for (var i = 0; i < mockUsageData.length; i++) {
-            var row = mockUsageData[i];
-            totalRequests += row.requests;
-            if (row.date >= monthStart) monthRequests += row.requests;
-            if (row.date === today) todayRequests += row.requests;
-        }
+    function loadUsage() {
+        var model = el.modelFilter.value;
+        var detailUrl = '/api/usage/detail?days=30' + (model ? '&model=' + encodeURIComponent(model) : '');
+        var dailyUrl = '/api/usage/daily?days=30';
 
-        document.getElementById('stat-total').textContent = formatNumber(totalRequests);
-        document.getElementById('stat-today').textContent = formatNumber(todayRequests);
-        document.getElementById('stat-month').textContent = formatNumber(monthRequests);
-        document.getElementById('table-summary').textContent =
-            '显示 ' + filtered.length + ' 条记录' + (filterModel ? '（已筛选）' : '');
+        apiFetch(dailyUrl).then(function (data) {
+            dailyData = data;
+            renderStats();
+            renderChart(dailyData);
+        }).catch(function () {});
 
+        apiFetch(detailUrl).then(function (data) {
+            detailData = data;
+            document.getElementById('table-summary').textContent =
+                '显示 ' + detailData.length + ' 条记录' + (model ? '（已筛选）' : '');
+            renderTable(detailData);
+        }).catch(function () {});
+    }
+
+    function renderStats() {
+        var totalReq = 0;
+        var todayReq = 0;
+        var monthReq = 0;
+        var now = new Date();
+        var todayStr = now.toISOString().slice(0, 10);
+        var monthStr = todayStr.slice(0, 8) + '01';
+
+        dailyData.forEach(function (row) {
+            totalReq += row.requests;
+            if (row.date >= monthStr) monthReq += row.requests;
+            if (row.date === todayStr) todayReq += row.requests;
+        });
+
+        document.getElementById('stat-total').textContent = formatNumber(totalReq);
+        document.getElementById('stat-today').textContent = formatNumber(todayReq);
+        document.getElementById('stat-month').textContent = formatNumber(monthReq);
+    }
+
+    function renderTable(data) {
         el.tbody.innerHTML = '';
-        if (!filtered.length) {
+        if (!data.length) {
             var tr = document.createElement('tr');
             var td = document.createElement('td');
             td.className = 'empty-row';
@@ -84,10 +119,9 @@ document.addEventListener('DOMContentLoaded', function () {
             el.tbody.appendChild(tr);
             return;
         }
-
-        for (var i = 0; i < filtered.length; i++) {
-            el.tbody.appendChild(usageRow(filtered[i]));
-        }
+        data.forEach(function (row) {
+            el.tbody.appendChild(usageRow(row));
+        });
     }
 
     function usageRow(row) {
@@ -116,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function () {
         tdOut.className = 'num-cell';
 
         var tdTotal = document.createElement('td');
-        tdTotal.textContent = formatNumber(row.input_tokens + row.output_tokens);
+        tdTotal.textContent = formatNumber(row.total_tokens);
         tdTotal.className = 'num-cell total-cell';
 
         tr.append(tdDate, tdModel, tdReq, tdIn, tdOut, tdTotal);
@@ -126,6 +160,154 @@ document.addEventListener('DOMContentLoaded', function () {
     function formatNumber(num) {
         return String(num).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
+
+    var _chartBars = [];
+
+    function renderChart(data) {
+        var canvas = el.chartCanvas;
+        var dpr = window.devicePixelRatio || 1;
+        var rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        var ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        var days = data.map(function (d) { return d.date; });
+        var values = data.map(function (d) { return d.total_tokens; });
+
+        var W = rect.width;
+        var H = rect.height;
+        var padL = 64;
+        var padR = 20;
+        var padT = 16;
+        var padB = 36;
+        var chartW = W - padL - padR;
+        var chartH = H - padT - padB;
+
+        ctx.clearRect(0, 0, W, H);
+
+        if (!days.length) {
+            ctx.fillStyle = '#8f9bb2';
+            ctx.font = '13px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('暂无数据', W / 2, H / 2);
+            _chartBars = [];
+            return;
+        }
+
+        var maxVal = Math.max.apply(null, values);
+        var niceMax = niceNum(maxVal);
+        var ticks = 5;
+
+        ctx.strokeStyle = '#303237';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#8f9bb2';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+
+        for (var t = 0; t <= ticks; t++) {
+            var val = (niceMax / ticks) * t;
+            var y = padT + chartH - (chartH * val / niceMax);
+            ctx.beginPath();
+            ctx.moveTo(padL, y);
+            ctx.lineTo(padL + chartW, y);
+            ctx.stroke();
+            ctx.fillText(shortNum(val), padL - 8, y);
+        }
+
+        var barGap = Math.max(4, chartW / days.length * 0.25);
+        var barW = Math.max(6, (chartW - barGap * (days.length + 1)) / days.length);
+        if (barW > 40) barW = 40;
+        var totalBarsW = days.length * barW + (days.length + 1) * barGap;
+        var offsetX = padL + (chartW - totalBarsW) / 2;
+
+        _chartBars = [];
+
+        for (var i = 0; i < days.length; i++) {
+            var x = offsetX + barGap + i * (barW + barGap);
+            var barH = (chartH * values[i]) / niceMax;
+            var y = padT + chartH - barH;
+
+            var grad = ctx.createLinearGradient(x, y, x, padT + chartH);
+            grad.addColorStop(0, '#7aa7ff');
+            grad.addColorStop(1, '#3b5998');
+            ctx.fillStyle = grad;
+            roundRect(ctx, x, y, barW, barH, 3);
+            ctx.fill();
+
+            ctx.fillStyle = '#8f9bb2';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            var label = days[i].slice(5);
+            ctx.fillText(label, x + barW / 2, padT + chartH + 6);
+
+            _chartBars.push({ x: x, y: y, w: barW, h: barH, date: days[i], value: values[i] });
+        }
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+        r = Math.min(r, w / 2, h / 2);
+        if (h < 1) h = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h);
+        ctx.lineTo(x, y + h);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+    }
+
+    function niceNum(val) {
+        if (val <= 0) return 1;
+        var exp = Math.floor(Math.log10(val));
+        var frac = val / Math.pow(10, exp);
+        var nice;
+        if (frac <= 1) nice = 1;
+        else if (frac <= 2) nice = 2;
+        else if (frac <= 5) nice = 5;
+        else nice = 10;
+        return nice * Math.pow(10, exp);
+    }
+
+    function shortNum(n) {
+        if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+        return String(Math.round(n));
+    }
+
+    el.chartCanvas.addEventListener('mousemove', function (e) {
+        var rect = el.chartCanvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left;
+        var my = e.clientY - rect.top;
+        var hit = null;
+        for (var i = 0; i < _chartBars.length; i++) {
+            var b = _chartBars[i];
+            if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+                hit = b;
+                break;
+            }
+        }
+        if (hit) {
+            chartTooltip.textContent = hit.date + '  ' + formatNumber(hit.value) + ' tokens';
+            chartTooltip.style.left = (hit.x + hit.w / 2) + 'px';
+            chartTooltip.style.top = (hit.y - 32) + 'px';
+            chartTooltip.classList.add('visible');
+        } else {
+            chartTooltip.classList.remove('visible');
+        }
+    });
+
+    el.chartCanvas.addEventListener('mouseleave', function () {
+        chartTooltip.classList.remove('visible');
+    });
+
+    window.addEventListener('resize', function () {
+        renderChart(dailyData);
+    });
 
     function showNotice(message) {
         var notice = document.getElementById('notice');

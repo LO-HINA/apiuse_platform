@@ -31,7 +31,7 @@
                     </div>
                     <div class="stat-body">
                         <span>总请求数</span>
-                        <strong id="stat-total">12,847</strong>
+                        <strong id="stat-total">--</strong>
                     </div>
                 </article>
                 <article class="stat-card">
@@ -45,7 +45,7 @@
                     </div>
                     <div class="stat-body">
                         <span>今日用量</span>
-                        <strong id="stat-today">1,234</strong>
+                        <strong id="stat-today">--</strong>
                     </div>
                 </article>
                 <article class="stat-card">
@@ -59,9 +59,21 @@
                     </div>
                     <div class="stat-body">
                         <span>本月用量</span>
-                        <strong id="stat-month">45,678</strong>
+                        <strong id="stat-month">--</strong>
                     </div>
                 </article>
+            </section>
+
+            <section class="panel chart-panel">
+                <div class="table-head">
+                    <div>
+                        <h2>Token 花费趋势</h2>
+                        <p id="chart-summary">最近 30 天每日 Token 总量</p>
+                    </div>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="usage-chart"></canvas>
+                </div>
             </section>
 
             <section class="panel table-panel">
@@ -73,9 +85,6 @@
                     <div class="filter-group">
                         <select id="model-filter" class="filter-select">
                             <option value="">全部模型</option>
-                            <option value="gpt-4o-mini">gpt-4o-mini</option>
-                            <option value="gpt-4o">gpt-4o</option>
-                            <option value="deepseek-chat">deepseek-chat</option>
                         </select>
                     </div>
                 </div>

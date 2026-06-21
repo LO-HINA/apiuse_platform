@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
+from app.core.crypto import decrypt, encrypt
 from app.core.database import get_db
 from app.modules.channels.schemas import ChannelConfig
 
@@ -24,12 +25,17 @@ def _now_iso() -> str:
 
 def _row_to_channel(row) -> ChannelConfig:
     """将 SQLite 行转为 ChannelConfig Pydantic 模型。"""
+    raw_key = row["api_key"]
+    try:
+        decrypted_key = decrypt(raw_key) if raw_key else raw_key
+    except Exception:
+        decrypted_key = raw_key  # 兼容迁移前未加密的旧数据
     return ChannelConfig(
         id=row["id"],
         name=row["name"],
         provider_type=row["provider_type"],
         base_url=row["base_url"],
-        api_key=row["api_key"],
+        api_key=decrypted_key,
         organization=row["organization"],
         models=json.loads(row["models"]) if row["models"] else [],
         group=row["group"],
@@ -117,7 +123,7 @@ async def create(channel: ChannelConfig) -> ChannelConfig:
                 channel.name,
                 channel.provider_type,
                 channel.base_url,
-                channel.api_key,
+                encrypt(channel.api_key) if channel.api_key else "",
                 channel.organization,
                 channel.group,
                 json.dumps(channel.models, ensure_ascii=False),

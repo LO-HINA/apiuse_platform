@@ -75,7 +75,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var data = await response.json().catch(function () { return null; });
         if (!response.ok) {
             var message = (data && data.message) || (data && data.detail) || ('请求失败: ' + response.status);
-            throw new Error(message);
+            var err = new Error(message);
+            err.status = response.status;
+            throw err;
         }
         return data;
     }
@@ -280,17 +282,6 @@ document.addEventListener('DOMContentLoaded', function () {
         })(key);
         tdActions.appendChild(editBtn);
 
-        if (key.status === 'active') {
-            var revokeBtn = document.createElement('button');
-            revokeBtn.className = 'ghost-btn danger-ghost';
-            revokeBtn.type = 'button';
-            revokeBtn.textContent = '吊销';
-            (function (keyId) {
-                revokeBtn.addEventListener('click', function () { revokeKey(keyId); });
-            })(key.id);
-            tdActions.appendChild(revokeBtn);
-        }
-
         var deleteBtn = document.createElement('button');
         deleteBtn.className = 'ghost-btn danger-ghost';
         deleteBtn.type = 'button';
@@ -430,17 +421,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function revokeKey(keyId) {
-        if (!confirm('确定要吊销此密钥吗？吊销后使用该密钥的 API 请求将立即失效。此操作不可撤销。')) return;
-        try {
-            await api('/api/keys/' + keyId + '/revoke', { method: 'PUT' });
-            await loadKeys();
-            showNotice('密钥已吊销。');
-        } catch (err) {
-            showNotice(err.message, true);
-        }
-    }
-
     async function deleteKey(keyId) {
         if (!confirm('确定要删除此密钥吗？此操作不可撤销。')) return;
         try {
@@ -473,7 +453,11 @@ document.addEventListener('DOMContentLoaded', function () {
             var copyBtn = spanEl.parentElement.querySelector('.copy-key-btn');
             if (copyBtn) copyBtn.hidden = false;
         } catch (err) {
-            showNotice('查看密钥失败: ' + err.message, true);
+            var msg = err.message || '未知错误';
+            if (err.status === 422) {
+                msg = '此密钥为历史迁移数据，无法查看明文';
+            }
+            showNotice('查看密钥失败: ' + msg, true);
         } finally {
             eyeBtnEl.disabled = false;
         }

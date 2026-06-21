@@ -149,12 +149,12 @@ async def delete_key(key_id: str) -> bool:
     return result
 
 
-async def reveal_key(key_id: str, user_id: str) -> ApiKeyRevealResponse | None:
+async def reveal_key(key_id: str, user_id: str) -> ApiKeyRevealResponse | None | str:
     key_config = await crud.get(key_id)
     if key_config is None or key_config.user_id != user_id:
         return None
     if not key_config.key_encrypted:
-        return None
+        return "no_encrypted"
     try:
         raw_key = key_crypto.decrypt(key_config.key_encrypted)
     except Exception:

@@ -88,7 +88,9 @@ async def reveal_key(
 ) -> ApiKeyRevealResponse:
     result = await service.reveal_key(key_id, current_user.id)
     if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found or decrypt failed")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
+    if result == "no_encrypted":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="此密钥为历史迁移数据，无法查看明文")
     return result
 
 
