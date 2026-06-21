@@ -4,14 +4,18 @@
 """
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.security import InvalidTokenError, decode_access_token
+from app.modules.api_keys.schemas import ApiKeyConfig
 from app.modules.auth import crud as auth_crud
 from app.storage import UserRecord
+
+logger = logging.getLogger(__name__)
 
 
 # auto_error=False: 头部缺失不立刻 401,把决定权交给依赖函数自己,
@@ -19,7 +23,6 @@ from app.storage import UserRecord
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # 公开路径白名单:使用 get_authenticated_user 时跳过认证
-# /v1/* 暂未实现,命中后统一返回 501
 PUBLIC_PATHS = frozenset({
     "/api/auth/status",
     "/api/auth/register",
@@ -39,6 +42,57 @@ def _public_user() -> UserRecord:
     )
 
 
+# ---------------------------------------------------------------------------
+# API Key 鉴权依赖(供 /v1/* 路由使用)
+# ---------------------------------------------------------------------------
+
+_api_key_bearer = HTTPBearer(auto_error=False)
+
+
+async def verify_api_key_dep(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_api_key_bearer)],
+) -> ApiKeyConfig:
+    """从 Authorization: Bearer sk-xxx 提取 key 并校验。
+
+    校验通过返回 ApiKeyConfig,失败直接抛 401。
+    路由层用 ``Depends(verify_api_key_dep)`` 即可。
+    """
+    from app.modules.api_keys import service as api_keys_service
+
+    exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="无效的 API Key",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if credentials is None:
+        raise exc
+
+    raw_key = credentials.credentials
+    if not raw_key or not raw_key.startswith("sk-"):
+        raise exc
+
+    key_config = await api_keys_service.verify_key(raw_key)
+    if key_config is None:
+        logger.warning("api_key auth failed: unknown key prefix=%s", raw_key[:8])
+        raise exc
+
+    if key_config.status != "active":
+        logger.warning("api_key auth failed: key=%s status=%s", key_config.id, key_config.status)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API Key 已禁用",
+        )
+
+    logger.info("api_key auth ok: key=%s user=%s", key_config.id, key_config.user_id)
+    return key_config
+
+
+# ---------------------------------------------------------------------------
+# 统一认证依赖
+# ---------------------------------------------------------------------------
+
+
 async def get_authenticated_user(
     request: Request,
     token: Annotated[str | None, Depends(oauth2_scheme)],
@@ -47,7 +101,7 @@ async def get_authenticated_user(
 
     - 公开路径白名单 → 跳过认证
     - /api/* 非白名单 → JWT 验证
-    - /v1/* → API Key 验证(预留,当前返回 501)
+    - /v1/* → API Key 验证,通过后返回对应的 UserRecord
     """
     path = request.url.path
 
@@ -55,12 +109,44 @@ async def get_authenticated_user(
     if path in PUBLIC_PATHS:
         return _public_user()
 
-    # /v1/* 路径:API Key 鉴权(预留)
+    # /v1/* 路径:API Key 鉴权
     if path.startswith("/v1/"):
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="API Key authentication not yet implemented",
-        )
+        from app.modules.api_keys import service as api_keys_service
+        from fastapi.security import HTTPBearer
+
+        cred_scheme = HTTPBearer(auto_error=False)
+        cred = await cred_scheme(request)
+
+        if cred is None or not cred.credentials or not cred.credentials.startswith("sk-"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的 API Key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        key_config = await api_keys_service.verify_key(cred.credentials)
+        if key_config is None:
+            logger.warning("api_key auth via g_a_u failed: unknown key prefix=%s", cred.credentials[:8])
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的 API Key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if key_config.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="API Key 已禁用",
+            )
+
+        user = await auth_crud.get(key_config.user_id)
+        if user is None or user.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="关联用户不可用",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        logger.info("api_key auth via g_a_u ok: key=%s user=%s", key_config.id, user.id)
+        return user
 
     # 默认:JWT 认证
     credentials_exc = HTTPException(
@@ -149,4 +235,5 @@ __all__ = [
     "get_current_user",
     "get_optional_current_user",
     "get_admin_user",
+    "verify_api_key_dep",
 ]

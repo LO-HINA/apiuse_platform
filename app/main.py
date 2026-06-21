@@ -25,7 +25,9 @@ from app.modules.channels.router import public_router as channels_public_router
 from app.modules.channels.router import router as channels_router
 from app.modules.chat.router import router as chat_router
 from app.modules.chat.schemas import HealthResponse
+from app.modules.relay.router import router as relay_router
 from app.modules.sessions.router import router as sessions_router
+from app.modules.usage.router import router as usage_router
 
 # 日志要在 app 创建前 setup,启动期日志才会按统一格式输出
 setup_logging()
@@ -103,10 +105,12 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(auth_router)
 app.include_router(sessions_router)
 app.include_router(chat_router)
+app.include_router(relay_router)
 app.include_router(channels_public_router)
 app.include_router(channels_router)
 app.include_router(api_keys_admin_router)
 app.include_router(api_keys_user_router)
+app.include_router(usage_router)
 
 
 # ----------------------------------------------------------------------
