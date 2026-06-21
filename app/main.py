@@ -8,23 +8,24 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
+from app.core.database import close_db, init_db
 from app.core.exceptions import register_exception_handlers
 from app.core.log_config import setup_logging
 from app.core.middleware import RequestIDMiddleware
 from app.modules.ai_providers.service import set_http_client
+from app.modules.api_keys.router import router as api_keys_admin_router
+from app.modules.api_keys.router import user_router as api_keys_user_router
 from app.modules.auth.router import router as auth_router
 from app.modules.channels import crud as channels_crud
 from app.modules.channels.router import public_router as channels_public_router
 from app.modules.channels.router import router as channels_router
-from app.modules.channels.service import load_channels
 from app.modules.chat.router import router as chat_router
 from app.modules.chat.schemas import HealthResponse
 from app.modules.sessions.router import router as sessions_router
-from app.storage import user_repo
 
 # 日志要在 app 创建前 setup,启动期日志才会按统一格式输出
 setup_logging()
@@ -32,7 +33,9 @@ logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_FILE = STATIC_DIR / "pages" / "chat" / "index.html"
-CHANNELS_FILE = STATIC_DIR / "pages" / "channels" / "index.html"
+CHANNELS_ACCOUNTS_FILE = STATIC_DIR / "pages" / "channels_accounts" / "index.html"
+CHANNELS_KEYS_FILE = STATIC_DIR / "pages" / "channels_keys" / "index.html"
+CHANNELS_USAGE_FILE = STATIC_DIR / "pages" / "channels_usage" / "index.html"
 AUTH_FILE = STATIC_DIR / "pages" / "auth" / "index.html"
 
 
@@ -48,15 +51,13 @@ async def lifespan(app: FastAPI):
         settings.PROJECT_NAME, settings.ENV, settings.USE_FAKE_AI,
     )
 
-    # users.json 同步加载到内存
-    user_repo.load()
-    # M2 channel 池同样在启动期加载。缺少 channels.json 不阻塞启动,
-    # 只有 USE_FAKE_AI=false 且真实调用进来时才会返回"无可用 channel"。
-    load_channels()
-    if not settings.USE_FAKE_AI and channels_crud.count() == 0:
+    # 初始化 SQLite 数据库(建表 + WAL + 外键)
+    await init_db()
+
+    if not settings.USE_FAKE_AI and await channels_crud.count() == 0:
         logger.warning(
-            "channel 池为空(未配置 data/channels.json),"
-            "已自动降级到 fake AI 模式。配置 channels.json 后重启即可切回真实上游。"
+            "channel 池为空,已自动降级到 fake AI 模式。"
+            "通过管理后台添加 channel 后即可切回真实上游。"
         )
 
     # 全应用共享一个 httpx.AsyncClient 才能复用连接池
@@ -70,7 +71,8 @@ async def lifespan(app: FastAPI):
     logger.info("app shutting down")
     await http_client.aclose()
     set_http_client(None)
-    logger.info("httpx.AsyncClient closed")
+    await close_db()
+    logger.info("httpx.AsyncClient closed, database closed")
 
 
 # ----------------------------------------------------------------------
@@ -103,6 +105,8 @@ app.include_router(sessions_router)
 app.include_router(chat_router)
 app.include_router(channels_public_router)
 app.include_router(channels_router)
+app.include_router(api_keys_admin_router)
+app.include_router(api_keys_user_router)
 
 
 # ----------------------------------------------------------------------
@@ -115,8 +119,23 @@ async def index():
 
 
 @app.get("/channels", include_in_schema=False)
-async def channels_page():
-    return FileResponse(CHANNELS_FILE)
+async def channels_redirect():
+    return RedirectResponse(url="/channels/accounts", status_code=302)
+
+
+@app.get("/channels/accounts", include_in_schema=False)
+async def channels_accounts_page():
+    return FileResponse(CHANNELS_ACCOUNTS_FILE)
+
+
+@app.get("/channels/keys", include_in_schema=False)
+async def channels_keys_page():
+    return FileResponse(CHANNELS_KEYS_FILE)
+
+
+@app.get("/channels/usage", include_in_schema=False)
+async def channels_usage_page():
+    return FileResponse(CHANNELS_USAGE_FILE)
 
 
 @app.get("/login", include_in_schema=False)

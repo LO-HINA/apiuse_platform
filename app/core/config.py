@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     ENV: Literal["dev", "staging", "prod"] = "dev"
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
+    ENCRYPTION_KEY: SecretStr = SecretStr("")
+
     # ------------------------------------------------------------------
     # JWT 鉴权
     # ------------------------------------------------------------------
@@ -76,6 +78,17 @@ class Settings(BaseSettings):
     def _check_cors_origins(cls, v: list[str]) -> list[str]:
         if not v:
             raise ValueError("CORS_ALLOW_ORIGINS 不能为空,至少要放一个具体域名")
+        return v
+
+    @field_validator("ENCRYPTION_KEY")
+    @classmethod
+    def _check_encryption_key(cls, v: SecretStr) -> SecretStr:
+        raw = v.get_secret_value()
+        if not raw:
+            raise ValueError(
+                "ENCRYPTION_KEY 必须在 .env 中显式配置。"
+                "可用 `python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"` 生成。"
+            )
         return v
 
     @field_validator("JWT_SECRET")

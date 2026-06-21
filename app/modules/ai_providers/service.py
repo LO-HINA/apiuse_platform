@@ -63,7 +63,7 @@ async def dispatch_chat(
 ) -> str:
     from app.modules.ai_providers import fake, openai_compat
 
-    if not settings.USE_FAKE_AI and channels_crud.count() == 0:
+    if not settings.USE_FAKE_AI and await channels_crud.count() == 0:
         logger.warning("channel pool empty, falling back to fake AI")
         return await fake.fake_ai_reply(message, history=history)
 
@@ -78,7 +78,7 @@ async def dispatch_chat_stream(
     """命名 dispatch_* 避免和路由 handler 撞名。"""
     from app.modules.ai_providers import fake, openai_compat
 
-    if not settings.USE_FAKE_AI and channels_crud.count() == 0:
+    if not settings.USE_FAKE_AI and await channels_crud.count() == 0:
         logger.warning("channel pool empty, falling back to fake AI")
         impl = fake.fake_ai_stream
     else:

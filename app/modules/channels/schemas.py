@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class ChannelConfig(BaseModel):
-    """Local channel record stored in channel JSON files."""
+    """Local channel record stored in SQLite database."""
 
     model_config = ConfigDict(extra="ignore")
 

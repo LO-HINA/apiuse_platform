@@ -1,0 +1,87 @@
+/* ── Shared Sidebar Styles ──────────────────────────────── */
+
+/* ── Collapsible Nav Group ────────────────────────────── */
+.nav-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-parent {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--text-main, #e3e3e3);
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    border: 0;
+    font: inherit;
+    font-size: inherit;
+    transition: background-color 0.2s;
+}
+
+.nav-parent:hover {
+    background: var(--bg-sidebar-hover, #282a2c);
+}
+
+.nav-parent.active {
+    background: var(--bg-sidebar-active, #343541);
+    color: var(--accent, #a8c7fa);
+}
+
+.nav-parent .chevron {
+    margin-left: auto;
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+    color: var(--text-muted, #8e8ea0);
+    flex-shrink: 0;
+}
+
+.nav-parent[data-expanded="true"] .chevron {
+    transform: rotate(90deg);
+}
+
+.nav-sublist {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.25s ease;
+}
+
+.nav-sublist.expanded {
+    max-height: 200px;
+}
+
+.nav-subitem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px 8px 48px;
+    border-radius: 8px;
+    color: var(--text-muted, #8e8ea0);
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.nav-subitem:hover {
+    background: var(--bg-sidebar-hover, #282a2c);
+    color: var(--text-main, #e3e3e3);
+}
+
+.nav-subitem.active {
+    color: var(--accent, #a8c7fa);
+    background: var(--bg-sidebar-active, #343541);
+}
+
+/* ── Shared page layout ──────────────────────────────── */
+.eyebrow {
+    color: var(--accent, #a8c7fa);
+    font-size: 12px;
+    letter-spacing: 0;
+    margin-bottom: 5px;
+}

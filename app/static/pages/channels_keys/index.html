@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Pool - 密钥管理</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/static/shared/base.css">
+    <link rel="stylesheet" href="/static/shared/sidebar.css">
+    <link rel="stylesheet" href="/static/pages/channels_keys/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <main class="keys-main">
+            <header class="keys-header">
+                <div>
+                    <p class="eyebrow">API Pool</p>
+                    <h1>密钥管理</h1>
+                </div>
+                <div class="toolbar">
+                    <button id="create-key-btn" class="primary-btn" type="button">创建密钥</button>
+                </div>
+            </header>
+
+            <section id="notice" class="notice" hidden></section>
+
+            <section class="panel table-panel">
+                <div class="table-head">
+                    <div>
+                        <h2>API 密钥</h2>
+                        <p id="table-summary">管理你的 API 访问密钥</p>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>密钥</th>
+                                <th>名称</th>
+                                <th>允许模型</th>
+                                <th>额度限制</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keys-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 创建密钥弹窗 -->
+    <div id="key-modal" class="modal-backdrop" hidden>
+        <section class="key-modal" role="dialog" aria-modal="true" aria-labelledby="key-modal-title">
+            <header class="modal-header">
+                <h2 id="key-modal-title">创建新密钥</h2>
+                <button id="close-key-modal-btn" class="icon-btn" type="button" aria-label="关闭">×</button>
+            </header>
+
+            <form id="key-form" class="modal-form" novalidate>
+                <div id="key-form-fields">
+                    <div class="form-grid">
+                        <label>
+                            <span>密钥名称 <b>*</b></span>
+                            <input id="key-name" name="name" type="text" placeholder="例如：项目 A" autocomplete="off" required>
+                        </label>
+
+                        <label>
+                            <span>额度限制（tokens）</span>
+                            <input id="key-quota" name="quota" type="number" placeholder="1000000" value="1000000" min="0" autocomplete="off">
+                        </label>
+
+                        <label class="full-field">
+                            <span>允许模型</span>
+                            <input id="key-models" name="models" type="text" placeholder="gpt-4o-mini, gpt-4.1-mini（留空表示不限）" autocomplete="off" list="key-model-suggestions">
+                            <datalist id="key-model-suggestions"></datalist>
+                        </label>
+
+                        <label>
+                            <span>有效时间（天）</span>
+                            <input id="key-validity-days" name="validity_days" type="number" placeholder="留空表示永不过期" min="1" autocomplete="off">
+                        </label>
+
+                        <label>
+                            <span>状态</span>
+                            <select id="key-status" name="status">
+                                <option value="active" selected>启用</option>
+                                <option value="disabled">禁用</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <footer class="modal-footer">
+                        <button id="cancel-key-modal-btn" class="ghost-btn" type="button">取消</button>
+                        <button id="submit-key-btn" class="primary-btn" type="submit">创建</button>
+                    </footer>
+                </div>
+
+                <div id="key-preview" class="key-preview" hidden>
+                    <div class="key-preview-inner">
+                        <div class="key-preview-icon">
+                            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="var(--green)" stroke-width="1.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <label class="full-field">
+                            <span>密钥已创建，请立即保存</span>
+                            <div class="key-display">
+                                <code id="key-value" class="mono"></code>
+                                <button id="copy-new-key-btn" class="key-btn" type="button" title="复制密钥">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="key-warning">此密钥仅显示一次，关闭后将无法再次查看完整密钥。</p>
+                        </label>
+                    </div>
+                    <footer class="modal-footer">
+                        <button id="close-after-create-btn" class="primary-btn" type="button">完成</button>
+                    </footer>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <!-- 编辑密钥弹窗 -->
+    <div id="edit-modal" class="modal-backdrop" hidden>
+        <section class="key-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+            <header class="modal-header">
+                <h2 id="edit-modal-title">修改密钥</h2>
+                <button id="edit-close-btn" class="icon-btn" type="button" aria-label="关闭">×</button>
+            </header>
+
+            <form id="edit-form" class="modal-form" novalidate>
+                <input id="edit-key-id" type="hidden">
+                <div class="form-grid">
+                    <label>
+                        <span>密钥名称</span>
+                        <input id="edit-key-name" name="name" type="text" placeholder="密钥名称" autocomplete="off">
+                    </label>
+
+                    <label>
+                        <span>额度限制（tokens）</span>
+                        <input id="edit-key-quota" name="quota" type="number" placeholder="0 表示不限" min="0" autocomplete="off">
+                    </label>
+
+                    <label class="full-field">
+                        <span>允许模型</span>
+                        <input id="edit-key-models" name="models" type="text" placeholder="gpt-4o-mini, gpt-4.1-mini（留空表示不限）" autocomplete="off" list="edit-model-suggestions">
+                        <datalist id="edit-model-suggestions"></datalist>
+                    </label>
+
+                    <label>
+                        <span>延长有效时间（天）</span>
+                        <input id="edit-key-validity-days" name="validity_days" type="number" placeholder="从当前时间起延长天数" min="1" autocomplete="off">
+                    </label>
+
+                    <label>
+                        <span>状态</span>
+                        <select id="edit-key-status" name="status">
+                            <option value="active">启用</option>
+                            <option value="disabled">禁用</option>
+                        </select>
+                    </label>
+                </div>
+
+                <footer class="modal-footer">
+                    <button id="edit-cancel-btn" class="ghost-btn" type="button">取消</button>
+                    <button id="edit-submit-btn" class="primary-btn" type="submit">保存</button>
+                </footer>
+            </form>
+        </section>
+    </div>
+
+    <script src="/static/shared/sidebar.js"></script>
+    <script src="/static/pages/channels_keys/script.js"></script>
+</body>
+</html>

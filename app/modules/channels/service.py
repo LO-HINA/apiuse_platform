@@ -162,7 +162,7 @@ async def select_channel(*, exclude_ids: set[str] | None = None) -> ChannelConfi
     usable = scheduler.usable_channels(channels, exclude_ids=exclude_ids)
     selected = scheduler.pick_weighted(usable)
     if selected is None:
-        raise ChannelPoolError("没有可用的上游 channel,请检查账号 JSON 或等待黑名单过期")
+        raise ChannelPoolError("没有可用的上游 channel,请检查通道配置或等待黑名单过期")
     logger.info("channel selected: channel=%s", selected.safe_label())
     return selected
 

@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import get_current_user
+from app.api.deps import get_authenticated_user
 from app.modules.auth.schemas import (
     AuthStatusResponse,
     LoginRequest,
@@ -74,7 +74,7 @@ async def login(payload: LoginRequest) -> TokenResponse:
 
 @router.get("/me", response_model=UserResponse)
 async def me(
-    current_user: Annotated[UserRecord, Depends(get_current_user)],
+    current_user: Annotated[UserRecord, Depends(get_authenticated_user)],
 ) -> UserResponse:
     """返回当前登录用户信息。"""
     return UserResponse.model_validate(current_user)

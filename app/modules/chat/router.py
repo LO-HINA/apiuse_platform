@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import get_optional_current_user
+from app.api.deps import get_authenticated_user
 from app.modules.chat import service as chat_service
 from app.modules.chat.schemas import (
     StreamErrorEvent,
@@ -42,7 +42,7 @@ def _safe_stream_error(exc: Exception) -> str:
 @router.get("/chat/stream")
 async def chat_stream(
     request: Request,
-    current_user: Annotated[Optional[UserRecord], Depends(get_optional_current_user)],
+    current_user: Annotated[UserRecord, Depends(get_authenticated_user)],
     message: str = Query(..., min_length=1, max_length=10000, description="用户输入"),
     session_id: Optional[UUID] = Query(
         None, description="会话 ID,不传则新建;传了但不存在或不归你时返回 404",
@@ -57,7 +57,7 @@ async def chat_stream(
         data: {"error": "..."}\\n\\n       —— 流内错误
         data: [DONE]\\n\\n                 —— 结束
     """
-    user_id = current_user.id if current_user else None
+    user_id = current_user.id
     try:
         current_session_id, history = await chat_service.prepare_stream(
             session_id=session_id,

@@ -64,7 +64,7 @@ async def _raise_pool_exhausted(failures: list[object]) -> None:
     if failures:
         logger.warning("channel pool exhausted: failures=%s", failures)
     raise channels_service.ChannelPoolError(
-        "所有上游 channel 都不可用,请稍后重试或检查 channels.json"
+        "所有上游 channel 都不可用,请稍后重试或检查通道配置"
     )
 
 

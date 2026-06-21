@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Pool - 渠道账号</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/static/shared/base.css">
+    <link rel="stylesheet" href="/static/shared/sidebar.css">
+    <link rel="stylesheet" href="/static/pages/channels_accounts/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <main class="channels-main">
+            <header class="channels-header">
+                <div>
+                    <p class="eyebrow">API Pool</p>
+                    <h1>渠道账号</h1>
+                </div>
+                <div class="toolbar">
+                    <button id="refresh-btn" class="ghost-btn" type="button">刷新</button>
+                    <button id="toggle-import-btn" class="ghost-btn" type="button">批量导入</button>
+                    <button id="open-channel-modal-btn" class="primary-btn" type="button">添加账号</button>
+                </div>
+            </header>
+
+            <section id="notice" class="notice" hidden></section>
+
+            <section id="import-panel" class="panel import-panel" hidden>
+                <div class="panel-head">
+                    <div>
+                        <h2>批量导入</h2>
+                        <p>一行一个账号：name,key,url,models</p>
+                    </div>
+                    <button id="import-submit-btn" class="primary-btn" type="button">解析并导入</button>
+                </div>
+                <textarea id="bulk-input" spellcheck="false" placeholder="SiliconFlow-01,sk-xxxx,https://api.siliconflow.cn/v1,Qwen/Qwen2.5-72B-Instruct|deepseek-chat&#10;OpenAI-Pro,sk-yyyy,https://api.openai.com/v1,gpt-4o-mini"></textarea>
+            </section>
+
+            <section class="stats-grid">
+                <article class="stat-card">
+                    <span>总账号</span>
+                    <strong id="stat-total">0</strong>
+                </article>
+                <article class="stat-card">
+                    <span>启用</span>
+                    <strong id="stat-enabled">0</strong>
+                </article>
+                <article class="stat-card">
+                    <span>失败次数</span>
+                    <strong id="stat-failures">0</strong>
+                </article>
+            </section>
+
+            <section class="panel table-panel">
+                <div class="table-head">
+                    <div>
+                        <h2>账号列表</h2>
+                        <p id="table-summary">等待加载</p>
+                    </div>
+                    <input id="search-input" type="search" placeholder="搜索名称、模型、Base URL">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>名称</th>
+                                <th>Key</th>
+                                <th>Base URL</th>
+                                <th>模型</th>
+                                <th>分组</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="channels-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="channel-modal" class="modal-backdrop" hidden>
+        <section class="channel-modal" role="dialog" aria-modal="true" aria-labelledby="channel-modal-title">
+            <header class="modal-header">
+                <h2 id="channel-modal-title">创建新的渠道</h2>
+                <button id="close-channel-modal-btn" class="icon-btn" type="button" aria-label="关闭">×</button>
+            </header>
+
+            <form id="channel-form" class="modal-form" novalidate>
+                <div class="form-grid">
+                    <label>
+                        <span>类型 <b>*</b></span>
+                        <select id="channel-type" name="provider_type" required>
+                            <option value="openai_compat" selected>OpenAI</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        <span>名称 <b>*</b></span>
+                        <input id="channel-name" name="name" type="text" placeholder="OpenAI-Pro" autocomplete="off" required>
+                    </label>
+
+                    <label class="full-field">
+                        <span>密钥 <b>*</b></span>
+                        <textarea id="channel-key" name="api_key" rows="1" placeholder="sk-..." spellcheck="false" required></textarea>
+                    </label>
+
+                    <label class="check-field">
+                        <input id="channel-batch" name="batch" type="checkbox">
+                        <span>批量创建</span>
+                    </label>
+
+                    <label>
+                        <span>组织</span>
+                        <input id="channel-organization" name="organization" type="text" placeholder="org-..." autocomplete="off">
+                    </label>
+
+                    <label>
+                        <span>API地址</span>
+                        <input id="channel-base-url" name="base_url" type="url" placeholder="https://api.openai.com/v1" autocomplete="off">
+                    </label>
+
+                    <label>
+                        <span>模型 <b>*</b></span>
+                        <input id="channel-model" name="model" type="text" placeholder="gpt-4o-mini" autocomplete="off" list="model-suggestions" required>
+                        <datalist id="model-suggestions"></datalist>
+                    </label>
+
+                    <label>
+                        <span>自定义模型</span>
+                        <input id="channel-custom-model" name="custom_model_name" type="text" placeholder="my-model，额外模型名" autocomplete="off">
+                    </label>
+
+                    <label>
+                        <span>分组</span>
+                        <select id="channel-group" name="group">
+                            <option value="default" selected>default</option>
+                            <option value="test">test</option>
+                            <option value="pro">pro</option>
+                        </select>
+                    </label>
+
+                    <div class="model-tools">
+                        <button id="fetch-models-btn" class="ghost-btn" type="button">获取模型列表</button>
+                    </div>
+                </div>
+
+                <section class="redirect-section" aria-labelledby="redirect-title">
+                    <div class="redirect-head">
+                        <div>
+                            <h3 id="redirect-title">模型重定向</h3>
+                        </div>
+                        <div class="segmented-control" role="group" aria-label="编辑模式">
+                            <button class="segment active" data-mode="visual" type="button">可视化</button>
+                            <button class="segment" data-mode="manual" type="button">手动编辑</button>
+                        </div>
+                    </div>
+
+                    <div id="redirect-visual" class="redirect-visual"></div>
+                    <button id="add-redirect-row-btn" class="ghost-btn small-btn" type="button">添加重定向</button>
+                    <textarea id="redirect-manual" class="redirect-manual" spellcheck="false" hidden placeholder='{"gpt-4o":"gpt-4o-mini"}'></textarea>
+                </section>
+
+                <footer class="modal-footer">
+                    <button id="cancel-channel-modal-btn" class="ghost-btn" type="button">取消</button>
+                    <button id="submit-channel-btn" class="primary-btn" type="submit">确认</button>
+                </footer>
+            </form>
+        </section>
+    </div>
+
+    <script src="/static/shared/sidebar.js"></script>
+    <script src="/static/pages/channels_accounts/script.js"></script>
+</body>
+</html>
