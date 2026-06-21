@@ -36,11 +36,12 @@ app/
 │   ├── middleware.py             # RequestIDMiddleware
 │   ├── exceptions.py             # 全局异常处理
 │   ├── security.py               # JWT + 密码哈希
-│   └── context.py                # request_id ContextVar
+│   ├── context.py                # request_id ContextVar
+│   ├── database.py               # SQLite 连接管理 + 建表
+│   └── crypto.py                 # API Key 加密/解密
 │
-├── storage/                      # 通用存储原子能力,不属于任何领域
-│   ├── repos.py                  # SessionRepo / MessageRepo / UserRepo
-│   └── json_store.py             # 原子写盘工具(后续 channels/plugins 复用)
+├── storage/                      # 通用存储能力 (SQLite 持久化)
+│   └── repos.py                  # UserRepo / SessionRepo / MessageRepo
 │
 ├── modules/                      # 领域模块,每个目录自治
 │   ├── auth/                     # 注册 / 登录 / me
@@ -66,12 +67,18 @@ app/
 │   │   ├── stream.py             # SSE 帧封装
 │   │   └── schemas.py
 │   │
-│   ├── channels/                 # 号池(M2)
-│   │   ├── router.py             # /api/admin/channels/*
-│   │   ├── service.py
-│   │   ├── crud.py
-│   │   ├── scheduler.py          # 加权随机 + failover + 黑名单
-│   │   └── schemas.py
+    │   ├── channels/                 # 号池管理 + 调度
+    │   │   ├── router.py             # /api/channels/models(公开) + /api/admin/channels/*(管理)
+    │   │   ├── service.py
+    │   │   ├── crud.py
+    │   │   ├── scheduler.py          # 加权随机 + failover + 黑名单
+    │   │   └── schemas.py
+    │   │
+    │   ├── api_keys/                 # API Key 管理
+    │   │   ├── router.py             # /api/keys(用户) + /api/admin/keys(管理)
+    │   │   ├── service.py            # 生成/验证/CRUD
+    │   │   ├── crud.py
+    │   │   └── schemas.py
 │   │
 │   ├── ai_providers/             # Provider 抽象(M2 起逐步落地)
 │   │   ├── base.py               # Provider 抽象基类
@@ -112,9 +119,11 @@ app/
 └── static/
     ├── pages/
     │   ├── chat/                 # 聊天测试页
-    │   ├── admin/                # 号池管理后台(M3)
-    │   └── plugins/              # 插件管理(M5)
-    └── shared/                   # 公用 JS / CSS
+    │   ├── channels_accounts/    # 号池账户管理
+    │   ├── channels_keys/        # 号池密钥管理
+    │   ├── channels_usage/       # 号池用量统计
+    │   └── admin/                # 号池管理后台(M3)
+    └── shared/                   # 公用 JS / CSS (sidebar 组件)
 ```
 
 **依赖方向单向**(上层可调下层,反之禁止):
@@ -124,6 +133,7 @@ modules/*           → storage / core
 modules/chat        → modules/sessions, modules/messages, modules/ai_providers, modules/context
 modules/channels    → modules/ai_providers
 modules/ai_providers → modules/channels (调度时拿 channel)
+modules/api_keys    → storage (通过 crud)
 api/deps            → modules/auth (拿 user)
 ```
 
@@ -135,68 +145,67 @@ api/deps            → modules/auth (拿 user)
 
 ### 3.1 已实现
 
-- `app/main.py` FastAPI 入口、lifespan 管 httpx 单例,启动加载 `users.json` 和 M2 `channels.json`
-- `app/api/deps.py` 跨领域依赖:`get_current_user` / `get_optional_current_user` / `get_admin_user`
+- `app/main.py` FastAPI 入口、lifespan 管 httpx 单例 + SQLite 初始化
+- `app/api/deps.py` 跨领域依赖:`get_authenticated_user`(统一认证)/ `get_optional_current_user` / `get_admin_user` / `PUBLIC_PATHS` 公开路径白名单
+- `app/core/database.py` SQLite 连接管理(WAL mode + foreign keys) + 5 表 DDL
+- `app/core/crypto.py` API Key 加密/解密(Fernet)
 - `app/modules/auth/` 注册 / 登录 / me,router 只管 HTTP,service 负责业务编排
 - `app/modules/sessions/` 会话 CRUD + `sessions.service` 所有权判断 + M2 LRU/TTL 消息体清理
 - `app/modules/messages/` 消息 CRUD + 单会话滑窗 trim
 - `app/modules/chat/` SSE 协议(首帧 session_id / token 事件 / 安全 error 事件 / `[DONE]`)
 - `app/modules/ai_providers/` fake + OpenAI-compatible provider;真实模式走 M2 channel 池
-- `app/modules/channels/` `data/channels.json` 加载、加权随机、失败计数、临时黑名单
+- `app/modules/channels/` channel CRUD + 加权随机 + 失败计数 + 临时黑名单 + admin API
+- `app/modules/api_keys/` API Key 生成(`sk-`前缀) / 哈希(SHA256) / 验证 / CRUD;管理 API
 - `app/core/security.py` JWT 编解码 + Argon2 密码哈希
 - `app/core/config.py` `pydantic-settings` 读 .env,包含 M2 channel / LRU 参数
-- `app/storage/repos.py` `SessionRepo` / `MessageRepo` / `UserRepo`
-- `app/static/` 原生 HTML/JS + EventSource 聊天页
+- `app/storage/repos.py` `UserRepo` / `SessionRepo` / `MessageRepo`(全部已切 SQLite)
+- `app/static/` 原生 HTML/JS + sidebar 组件 + channels 管理三件套(accounts/keys/usage)
 
-### 3.2 M2 当前边界
+### 3.2 M2/M3 当前边界
 
-- 当前没有 `channels.router.py`;M3 才做管理 API + 后台 UI。
-- 当前没有 `POST /v1/chat/completions`;M4 才做 OpenAI SDK 可直连代理路由。
-- 当前只支持 `provider_type="openai_compat"`;New-API / Anthropic / Gemini 等属于后续 Provider 适配。
-- `data/channels.json` 支持直接数组或 `{"channels": [...]}` 两种本地写法,但真实 key 只留本机。
+- channels 模块已有 `router.py`:`/api/channels/models`(公开) + `/api/admin/channels/*`(管理员)
+- channels admin UI 已有三件套:accounts / keys / usage
+- `POST /v1/chat/completions` 尚未实现(M4)
+- 当前只支持 `provider_type="openai_compat"`;New-API / Anthropic / Gemini 等属于后续 Provider 适配
+- channel 配置通过管理后台创建,存储于 SQLite `channels` 表
 
 ---
 
 ## 4. 数据模型与持久化
 
-| 数据 | 持久化 | 重启行为 | 切 DB 时机 |
+**已于 M2.5 切入 SQLite**(aiosqlite),统一 `data/data.db` 单文件,WAL 模式 + 外键级联。不再使用 JSON 文件/内存字典。
+
+| 表 | 持久化 | 外键 | 说明 |
 |---|---|---|---|
-| Channel(号池条目) | `data/channels.json` | 保留 | 短期不切 |
-| User | `data/users.json` | 保留 | 短期不切 |
-| Plugin 配置 | `data/plugins.json` | 保留 | 短期不切 |
-| Session(会话元信息) | 仅内存 | 清空 | M6 上线时随 memory/model_logs 一起评估 |
-| Message | 仅内存 | 清空 | 同上 |
-| Memory(长期记忆) | 内存 + json(M6) | 保留 | 规模大或要做向量检索时切 DB |
-| Model Call Log | 内存环形缓冲 + json 周期落盘(M6) | 部分丢失 | 上量时切 DB |
+| `users` | SQLite | — | 用户账号,username UNIQUE,password_hash argon2 |
+| `sessions` | SQLite | `user_id → users(id) ON DELETE CASCADE` | 删用户时自动清会话 |
+| `messages` | SQLite | `session_id → sessions(id) ON DELETE CASCADE` | 删会话时自动清消息;id AUTOINCREMENT |
+| `channels` | SQLite | — | 号池 channel,api_key 经 Fernet 加密存储 |
+| `api_keys` | SQLite | `user_id → users(id)` | 用户 API Key,key_hash SHA256 UNIQUE |
+
+时间字段全部存 ISO 8601 字符串(TEXT),读写双向转换。
 
 ### 4.1 字段约定
 
-- **Channel**: `id` / `name` / `provider_type`(openai_compat / newapi / ...) / `base_url` / `api_key` / `models[]` / `weight` / `enabled` / 运行时字段(`blacklisted_until` / `success_count` / `failure_count`)
-- **User**: `id` / `username` / `password_hash` / `role`(admin / user) / `created_at`
-- **Session**: `id` / `user_id`(可空 = 匿名) / `title` / `created_at` / `updated_at` / `last_accessed_at`(LRU 用)
+- **Channel**: `id` / `name` / `provider_type`(openai_compat / ...) / `base_url` / `api_key`(加密) / `models[]`(JSON string) / `weight` / `enabled` / 运行时字段(`blacklisted_until` / `success_count` / `failure_count`)
+- **User**: `id` / `username` / `password_hash` / `display_name` / `role`(admin / user) / `status`(active / disabled) / `created_at` / `updated_at`
+- **Session**: `id` / `user_id` / `title` / `created_at` / `updated_at` / `last_accessed_at`(LRU 用)
 - **Message**: `id`(自增) / `session_id` / `role` / `content` / `created_at`
+- **ApiKey**: `id` / `user_id` / `key_hash`(SHA256) / `key_masked` / `name` / `models[]` / `quota` / `used_quota` / `status` / `expires_at`
 
-### 4.2 内存压力控制(全内存路线的核心)
+### 4.2 内存压力控制
 
-号池本身不存对话,内存压力来自前端聊天 UI 的 sessions/messages。两道闸:
+两道闸(直接从 SQLite 查,不依赖内存加载):
 
-1. **单会话滑窗**:`SESSION_MAX_MESSAGES`(默认 100)条上限,超出 trim 丢最早(已实现)
-2. **总会话 LRU + TTL**(M2 引入):
-   - `MAX_ACTIVE_SESSIONS`(默认 1000)超出按 `last_accessed_at` 淘汰整个会话的消息体,只留元信息
-   - `SESSION_IDLE_TTL_MINUTES`(默认 60)闲置超时同样清消息体留元信息
-   - 用户翻列表能看到 session 元信息,但点进去消息为空 → 测试平台可接受
+1. **单会话滑窗**:`SESSION_MAX_MESSAGES`(默认 100)条上限,超出 trim 丢最早
+2. **总会话 LRU + TTL**:`MAX_ACTIVE_SESSIONS` / `SESSION_IDLE_TTL_MINUTES` 超出按 `last_accessed_at` 淘汰消息体,只留元信息
 
-**当前不做 summary 压缩**:本平台目标是验证号池调度,不是对话连贯性产品,trim + LRU 已够;summary 要多调一次 AI 反而增加成本。等 M6 memory 模块落地时再统一回看。
+### 4.3 连接管理
 
-### 4.3 长期切 DB 的边界
-
-短期(M1 - M5)全 json + 内存。出现以下信号之一**才考虑**为该模块切回 SQLAlchemy + Alembic,**只切受影响的模块**,不全家桶迁移:
-
-- `model_logs` 单文件 > 50MB(查询变慢)
-- `memory` 需要按 user 维度做相似度检索(json 撑不住)
-- `channels` 数量 > 50 + 多管理员并发写(json 锁竞争)
-
-当前 `crud.*` 函数签名就是为这一刻铺路:实现可换,接口不动。
+- `app/core/database.py` 模块级单例连接(`get_db()`)
+- 启动时 `init_db()`:建表 + `PRAGMA journal_mode=WAL` + `PRAGMA foreign_keys=ON`
+- 关闭时 `close_db()`
+- 使用参数化查询(`?`占位符),禁止字符串拼接
 
 ---
 
@@ -211,33 +220,44 @@ api/deps            → modules/auth (拿 user)
 
 ---
 
-## 6. 协作工作流(强约束)
+## 6. 协作工作流(Trellis 管理)
 
-任何修改前必须先:
+本项目由 Trellis 管理开发流程。参见 `.trellis/workflow.md` 完整文档。
+
+### 任务流程
 
 ```
-Explain → Plan → Wait Confirm → Build → Build Summary
+建任务(task.py create) → 需求讨论(brainstorm) → 配置语境(jsonl) → 激活(task.py start) → 派发子代理实施 → 质量检查 → spec 更新 → 提交 → 归档(task.py archive)
 ```
 
-未经确认禁止直接修改。
+### 子代理调度
 
-**新增硬规则**:
+- **实施阶段**:派发 `trellis-implement` 子代理(自动注入 spec + prd + research)
+- **检查阶段**:派发 `trellis-check` 子代理(审查 + 自动修复)
+- **研究阶段**:派发 `trellis-research` 子代理(写出到 `research/` 目录)
+- 主 session 不直接编辑代码,除非用户明确说 "直接改"/"别派 sub-agent"
+
+### 强约束
 
 - 任何"删除文件 / 改公共接口形状 / 跨模块重组"前必须列清单等确认
 - 跨模块只允许"上层 → 下层"导入,反向导入要先讨论
 - 一个任务只动一个模块,跨模块重组单独开任务
+- lint / typecheck 必须在提交前通过
 
 ---
 
 ## 7. 安全约束
 
 - `.env` 不进 git,只提交 `.env.example`
-- `data/` 整个 .gitignore:含上游 API Key (`channels.json`) 和密码哈希 (`users.json`)
-- 管理类 API 必须由 `get_admin_user` 依赖守住(基于 `role=admin`)
-- 上游 API Key 不向前端透出,响应里一律 mask 成 `sk-***xxxx`
+- `data/data.db` 整个 data/ .gitignore
+- 所有 `/api/*` 路由由 `get_authenticated_user` 统一守卫(路径白名单例外:`/api/auth/status`, `/api/auth/register`, `/api/auth/login`, `/api/channels/models`, `/health`)
+- 管理类 API 必须由 `get_admin_user` 依赖守住(chains through `get_authenticated_user`,基于 `role=admin`)
+- `/v1/*` 路径预留 API Key 鉴权(当前返回 501)
+- 上游 API Key 不向前端透出,存储时经 Fernet 加密
+- Channel 响应里 api_key 字段 mask 成 `sk-***xxxx`
 - 浏览器前端不直接调上游模型,所有调用走后端代理
 - `JWT_SECRET` 启动期校验长度 >= 32,空值直接拒启动
-- 插件执行(M5)默认沙箱:超时 + 不允许任意文件系统访问
+- `API_KEY_ENCRYPTION_KEY` 启动期自动生成(如果缺失),用于 Fernet 加解密
 
 ---
 
@@ -246,10 +266,11 @@ Explain → Plan → Wait Confirm → Build → Build Summary
 | 里程碑 | 内容 | 验收 |
 |---|---|---|
 | **M1** ✅ | 删除 DB / 摘要 / 调用日志,CRUD 改内存版 | 启动不再依赖 MySQL;SSE 聊天 + 登录注册不回归 |
-| **M1.5** | 目录按 `modules/<领域>/` 重组 | 现有功能不回归;依赖单向;`api/` 下只剩 `deps.py` |
-| **M2** ✅ | Channel + `channels.json` + 加权随机 + failover 黑名单 + LRU/TTL 内存控制 | 后端核心已落地;M3 再做管理 UI |
-| **M3** | 管理 API + 管理后台 UI(`/static/pages/admin/`) | 管理员可视化增删改 channel + 看统计面板 |
-| **M4** | OpenAI 兼容代理路由 `POST /v1/chat/completions` + Provider 抽象正式落地(`openai_compat.py` / `newapi.py`) | OpenAI SDK 能直接打通 |
+| **M1.5** ✅ | 目录按 `modules/<领域>/` 重组 | 现有功能不回归;依赖单向;`api/` 下只剩 `deps.py` |
+| **M2** ✅ | Channel + 加权随机 + failover 黑名单 + LRU/TTL + admin API + admin UI | 管理后台可视化管理 channel |
+| **M2.5** ✅ | SQLite 迁移 + 统一认证守卫 `get_authenticated_user` + API Key 模块 | 全量持久化;外键级联;新增路由默认需要认证 |
+| **M3** 🔄 | 管理 API + 管理后台 UI(`/static/pages/channels_*/`) | channels 三件套已完成;channels.admin 待完善 |
+| **M4** | OpenAI 兼容代理路由 `POST /v1/chat/completions` + Provider 抽象正式落地 | OpenAI SDK 能直接打通 |
 | **M5** | 插件系统(plugins 模块 + builtin/echo/calculator/time)+ 前端插件管理页 | 聊天里能触发 echo 插件 |
 | **M6** | memory + model_logs + context builder(history + memory,summary 视情况) | 多轮对话能回忆;后台能看调用日志 |
 | **M7** | Docker + docker-compose(app + nginx) | `docker-compose up` 一键起 |
@@ -274,11 +295,12 @@ Explain → Plan → Wait Confirm → Build → Build Summary
 
 ## 10. 当前不做的事
 
-本阶段(M1 - M5)禁止引入:
+本阶段禁止引入:
 
-- 任何数据库(SQLite / Redis / DuckDB)— 等明确撞到 § 4.3 边界再切
 - 计费 / 配额 / token 倍率 / 虚拟 key 转发(One API 那一套)— 不做
 - 完整 RBAC — 只用 admin / user 二态
+- SQLAlchemy / Alembic — 当前用 aiosqlite + 原生 SQL,不做 ORM
+- Redis / DuckDB / 其他数据库 — SQLite 够用
 - Prometheus / OpenTelemetry — M7 之后再说
 - WebSocket — SSE 已经够用
 - 前端框架(React / Vue)— 保持原生 HTML/JS
