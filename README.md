@@ -12,22 +12,7 @@
 
 灵感来源 One API / New API,但只做 **号池调度 + 测试可视化**,不做计费 / 配额 / 虚拟 key 转发。当前是个人学习项目,但按企业级目录约定写——领域分层、依赖单向、模块自治。
 
-## 当前进度
 
-**M2 后端核心已进入(2026-06-08)
-
-| 里程碑 | 状态 | 内容 |
-|---|---|---|
-| M1 | 完成 | 删除 DB / 摘要 / 调用日志,CRUD 改内存 + json |
-| **M1.5** | **完成** | 目录按领域重组,`api/` 下只剩 `deps.py` |
-| **M2** | **后端核心已落地** | Channel 号池 + 加权随机 + failover + LRU/TTL |
-| M3 | 未开始 | 管理 API + 后台 UI |
-| M4 | 未开始 | OpenAI 兼容代理路由 `POST /v1/chat/completions` |
-| M5 | 未开始 | 插件系统(echo / calculator / time) |
-| M6 | 未开始 | memory + model_logs + context builder |
-| M7 / M8 | 未开始 | Docker / pytest + CI |
-
-完整里程碑见 `CLAUDE.md` § 8。
 
 ## 项目结构
 
