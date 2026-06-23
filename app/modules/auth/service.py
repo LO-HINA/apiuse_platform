@@ -30,6 +30,11 @@ async def register_user(
         display_name=display_name,
         role=role,
     )
+
+    # 为新用户自动创建 Web 端默认 API Key
+    from app.modules.api_keys.service import ensure_default_key
+    await ensure_default_key(user.id)
+
     return issue_token(user)
 
 

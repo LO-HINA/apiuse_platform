@@ -5,16 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import uuid
-from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import verify_api_key_dep
-from app.core.database import get_db
-from app.modules.api_keys import crud as api_keys_crud
 from app.modules.api_keys.schemas import ApiKeyConfig
 from app.modules.channels.service import ChannelPoolError
 from app.modules.relay.schemas import ChatCompletionRequest, ChatCompletionResponse
@@ -60,7 +56,7 @@ async def chat_completions(
         async def event_generator():
             cancelled = False
             try:
-                async for frame in relay_service.stream_chat_completion(body):
+                async for frame in relay_service.stream_chat_completion(body, api_key_id=api_key_config.id):
                     if await request.is_disconnected():
                         cancelled = True
                         logger.info("relay stream client disconnected: key=%s", api_key_config.id)
@@ -96,30 +92,11 @@ async def chat_completions(
 
     # Non-streaming
     try:
-        response = await relay_service.handle_chat_completion(body)
+        response = await relay_service.handle_chat_completion(body, api_key_id=api_key_config.id)
     except ChannelPoolError as exc:
         from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=exc.safe_message,
         )
-    # Track token usage
-    if response.usage and response.usage.total_tokens > 0:
-        await api_keys_crud.increment_used_quota(api_key_config.id, response.usage.total_tokens)
-        db = get_db()
-        await db.execute(
-            """INSERT INTO call_logs
-               (id, api_key_id, model, stream, prompt_tokens, completion_tokens, total_tokens, created_at)
-               VALUES (?, ?, ?, 0, ?, ?, ?, ?)""",
-            (
-                str(uuid.uuid4()),
-                api_key_config.id,
-                body.model,
-                response.usage.prompt_tokens,
-                response.usage.completion_tokens,
-                response.usage.total_tokens,
-                datetime.now(timezone.utc).isoformat(),
-            ),
-        )
-        await db.commit()
     return response

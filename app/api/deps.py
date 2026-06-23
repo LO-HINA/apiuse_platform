@@ -84,6 +84,12 @@ async def verify_api_key_dep(
             detail="API Key 已禁用",
         )
 
+    if key_config.is_default:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="此密钥仅限 Web 端使用，不可用于 API 调用",
+        )
+
     logger.info("api_key auth ok: key=%s user=%s", key_config.id, key_config.user_id)
     return key_config
 
@@ -136,6 +142,12 @@ async def get_authenticated_user(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="API Key 已禁用",
+            )
+
+        if key_config.is_default:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="此密钥仅限 Web 端使用，不可用于 API 调用",
             )
 
         user = await auth_crud.get(key_config.user_id)

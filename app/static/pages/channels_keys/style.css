@@ -444,6 +444,38 @@ tbody tr:hover {
     padding: 34px;
 }
 
+.test-btn {
+    margin-right: 4px;
+}
+
+.test-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+    margin-left: 4px;
+    vertical-align: middle;
+    transition: opacity 0.8s ease;
+}
+
+.test-pill.success {
+    color: var(--green);
+    background: #14251d;
+    border: 1px solid #1f4a34;
+}
+
+.test-pill.failure {
+    color: var(--red);
+    background: #291919;
+    border: 1px solid #573030;
+}
+
+.test-pill.fade-out {
+    opacity: 0;
+}
+
 .icon-btn {
     width: 32px;
     height: 32px;

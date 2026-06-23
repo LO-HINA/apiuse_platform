@@ -61,7 +61,7 @@ app/
 │   │   ├── crud.py
 │   │   └── schemas.py
 │   │
-│   ├── chat/                     # SSE 编排:sessions + messages + ai_providers
+│   ├── chat/                     # SSE 编排:sessions + messages + adapter
 │   │   ├── router.py             # /api/chat/stream
 │   │   ├── service.py            # prepare_stream / persist_assistant
 │   │   ├── stream.py             # SSE 帧封装
@@ -80,13 +80,11 @@ app/
     │   │   ├── crud.py
     │   │   └── schemas.py
 │   │
-│   ├── ai_providers/             # Provider 抽象(M2 起逐步落地)
-│   │   ├── base.py               # Provider 抽象基类
-│   │   ├── service.py            # dispatch_chat / dispatch_chat_stream
-│   │   ├── fake.py
-│   │   ├── openai_compat.py      # OpenAI 兼容协议
-│   │   ├── newapi.py             # New-API 上游
-│   │   └── schemas.py
+│   ├── adapter/                  # Provider Adapter 适配层
+│   │   ├── base.py               # ProviderAdapter 抽象基类 + 注册表
+│   │   ├── service.py            # httpx 单例 + build_messages
+│   │   ├── openai_compat_adapter.py  # OpenAI 兼容协议 Adapter
+│   │   └── fake.py
 │   │
 │   ├── plugins/                  # 插件系统(M5)
 │   │   ├── router.py             # /api/plugins
@@ -130,9 +128,9 @@ app/
 
 ```
 modules/*           → storage / core
-modules/chat        → modules/sessions, modules/messages, modules/ai_providers, modules/context
-modules/channels    → modules/ai_providers
-modules/ai_providers → modules/channels (调度时拿 channel)
+modules/chat        → modules/sessions, modules/messages, modules/adapter, modules/context
+modules/channels    → modules/adapter
+modules/adapter → modules/channels (调度时拿 channel)
 modules/api_keys    → storage (通过 crud)
 api/deps            → modules/auth (拿 user)
 ```
@@ -153,7 +151,7 @@ api/deps            → modules/auth (拿 user)
 - `app/modules/sessions/` 会话 CRUD + `sessions.service` 所有权判断 + M2 LRU/TTL 消息体清理
 - `app/modules/messages/` 消息 CRUD + 单会话滑窗 trim
 - `app/modules/chat/` SSE 协议(首帧 session_id / token 事件 / 安全 error 事件 / `[DONE]`)
-- `app/modules/ai_providers/` fake + OpenAI-compatible provider;真实模式走 M2 channel 池
+- `app/modules/adapter/` fake + OpenAI-compatible provider + ProviderAdapter 抽象;真实模式走 M2 channel 池
 - `app/modules/channels/` channel CRUD + 加权随机 + 失败计数 + 临时黑名单 + admin API
 - `app/modules/api_keys/` API Key 生成(`sk-`前缀) / 哈希(SHA256) / 验证 / CRUD;管理 API
 - `app/core/security.py` JWT 编解码 + Argon2 密码哈希

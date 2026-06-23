@@ -9,6 +9,13 @@ function getAccessToken() {
     return localStorage.getItem('access_token') || localStorage.getItem('token') || '';
 }
 
+// ------------------------------------------------------------------
+// sessionStorage —— 只保留当前标签页的会话
+// 标签页关闭自动清，导航/刷新不丢
+// ------------------------------------------------------------------
+const SESSION_KEY = 'chat_current_session_id';
+const MODEL_KEY   = 'chat_selected_model';
+
 document.addEventListener('DOMContentLoaded', () => {
     const chatMain = document.getElementById('chat-main');
     const chatContainer = document.getElementById('chat-container');
@@ -33,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadUserInfo();
-    initModelSelector();
+    initModelSelector().then(() => restoreOrStart());
 
     // ------------------------------------------------------------------
     // 模型选择器
@@ -57,13 +64,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 默认选中第一个可用模型
-        const firstAvailable = availableModels.find(m => m.available);
-        if (firstAvailable) {
-            selectedModel = firstAvailable.model;
-            textEl.textContent = selectedModel;
+        // 默认选中第一个可用模型（sessionStorage 已有则保留）
+        if (!selectedModel) {
+            const firstAvailable = availableModels.find(m => m.available);
+            if (firstAvailable) {
+                selectedModel = firstAvailable.model;
+                sessionStorage.setItem(MODEL_KEY, selectedModel);
+            }
+            textEl.textContent = selectedModel || (availableModels.length > 0 ? '无可用模型' : '选择模型');
         } else {
-            textEl.textContent = availableModels.length > 0 ? '无可用模型' : '选择模型';
+            textEl.textContent = selectedModel;
         }
 
         renderModelList();
@@ -142,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 button.addEventListener('click', () => {
                     selectedModel = item.model;
+                    sessionStorage.setItem(MODEL_KEY, selectedModel);
                     if (textEl) textEl.textContent = selectedModel;
                     // 关闭 dropdown
                     const dropdown = document.getElementById('model-dropdown');
@@ -195,6 +206,45 @@ document.addEventListener('DOMContentLoaded', () => {
         newChatBtn.addEventListener('click', resetChat);
     }
 
+    // ------------------------------------------------------------------
+    // 恢复会话 — 页面加载时检查 sessionStorage
+    // ------------------------------------------------------------------
+    async function restoreOrStart() {
+        const savedId = sessionStorage.getItem(SESSION_KEY);
+        if (!savedId) {
+            // 新标签页，从头开始
+            currentSessionId = null;
+            return;
+        }
+        // 从后端拉历史消息
+        try {
+            const token = getAccessToken();
+            const res = await fetch(`/api/sessions/${savedId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                // 会话已删除或无权访问，清除记录重新开始
+                sessionStorage.removeItem(SESSION_KEY);
+                currentSessionId = null;
+                return;
+            }
+            const detail = await res.json();
+            currentSessionId = detail.session_id;
+            chatContainer.innerHTML = '';
+            for (const msg of (detail.messages || [])) {
+                appendMessage(msg.role, msg.content);
+            }
+            chatMain.classList.add('is-chatting');
+            messageInput.focus();
+        } catch (err) {
+            // 网络问题不做处理，用户可手动开始新聊天
+        }
+    }
+
+    // 恢复保存的模型选择
+    const savedModel = sessionStorage.getItem(MODEL_KEY);
+    if (savedModel) selectedModel = savedModel;
+
     function resizeInput() {
         messageInput.style.height = 'auto';
         messageInput.style.height = `${Math.min(messageInput.scrollHeight, 200)}px`;
@@ -214,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         currentSessionId = null;
+        sessionStorage.removeItem(SESSION_KEY);
         chatContainer.innerHTML = '';
         chatMain.classList.remove('is-chatting');
         sendBtn.disabled = false;
@@ -287,7 +338,10 @@ document.addEventListener('DOMContentLoaded', () => {
             try { p = JSON.parse(data); } catch {
                 aiContentNode.textContent += data; scrollToBottom(); return false;
             }
-            if (typeof p.session_id === 'string') currentSessionId = p.session_id;
+            if (typeof p.session_id === 'string') {
+                currentSessionId = p.session_id;
+                sessionStorage.setItem(SESSION_KEY, currentSessionId);
+            }
             else if (typeof p.token === 'string') { aiContentNode.textContent += p.token; scrollToBottom(); }
             else if (typeof p.error === 'string') { aiContentNode.textContent += `\n[错误] ${p.error}`; scrollToBottom(); }
             return false;

@@ -35,6 +35,7 @@ def _row_to_api_key_config(row) -> ApiKeyConfig:
         quota=row["quota"],
         used_quota=row["used_quota"],
         status=row["status"],
+        is_default=bool(row["is_default"]) if "is_default" in row.keys() else False,
         user_id=row["user_id"],
         expires_at=(
             datetime.fromisoformat(row["expires_at"])
@@ -142,8 +143,8 @@ async def create(key_config: ApiKeyConfig) -> ApiKeyConfig:
         await db.execute(
             "INSERT INTO api_keys "
             "(id, user_id, key_hash, key_prefix, key_masked, key_encrypted, name, models, "
-            "quota, used_quota, status, expires_at, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "quota, used_quota, status, is_default, expires_at, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 key_config.id,
                 key_config.user_id,
@@ -156,6 +157,7 @@ async def create(key_config: ApiKeyConfig) -> ApiKeyConfig:
                 key_config.quota,
                 key_config.used_quota,
                 key_config.status,
+                int(key_config.is_default),
                 expires_at,
                 created_at,
                 updated_at,

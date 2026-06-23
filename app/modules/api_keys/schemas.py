@@ -18,6 +18,7 @@ class ApiKeyConfig(BaseModel):
     quota: int = Field(default=0, ge=0)
     used_quota: int = Field(default=0, ge=0)
     status: Literal["active", "disabled"] = "active"
+    is_default: bool = False
     user_id: str = Field(..., min_length=1, max_length=80)
     key_encrypted: str | None = None
     expires_at: datetime | None = None
@@ -49,6 +50,7 @@ class ApiKeyPublic(BaseModel):
     quota: int
     used_quota: int
     status: Literal["active", "disabled"]
+    is_default: bool = False
     user_id: str
     expires_at: datetime | None
     created_at: datetime
@@ -62,3 +64,10 @@ class ApiKeyRevealResponse(BaseModel):
 class ApiKeyCreateResponse(BaseModel):
     key: str
     key_info: ApiKeyPublic
+
+
+class ApiKeyTestResponse(BaseModel):
+    success: bool
+    latency_ms: int
+    model: str
+    error: str | None = None

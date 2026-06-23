@@ -16,7 +16,9 @@ from app.core.database import close_db, init_db
 from app.core.exceptions import register_exception_handlers
 from app.core.log_config import setup_logging
 from app.core.middleware import RequestIDMiddleware
-from app.modules.ai_providers.service import set_http_client
+from app.modules.adapter.base import register_adapter
+from app.modules.adapter.openai_compat_adapter import OpenAICompatAdapter
+from app.modules.adapter.service import set_http_client
 from app.modules.api_keys.router import router as api_keys_admin_router
 from app.modules.api_keys.router import user_router as api_keys_user_router
 from app.modules.auth.router import router as auth_router
@@ -62,6 +64,9 @@ async def lifespan(app: FastAPI):
             "通过管理后台添加 channel 后即可切回真实上游。"
         )
 
+    # 为所有已有用户补建默认 API Key（幂等）
+    await _ensure_default_keys_for_all_users()
+
     # 全应用共享一个 httpx.AsyncClient 才能复用连接池
     http_client = httpx.AsyncClient(timeout=settings.REQUEST_TIMEOUT)
     set_http_client(http_client)
@@ -87,6 +92,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# 注册 Provider Adapter（模块级，import 即生效）
+register_adapter(OpenAICompatAdapter())
 
 # 中间件后注册的在外层、先执行;RequestID 要最先跑,所以最后注册
 app.add_middleware(
@@ -146,6 +154,20 @@ async def channels_usage_page():
 @app.get("/register", include_in_schema=False)
 async def auth_page():
     return FileResponse(AUTH_FILE)
+
+
+async def _ensure_default_keys_for_all_users() -> None:
+    """启动时为所有已有用户补建默认 API Key（幂等）。"""
+    from app.core.database import get_db
+    from app.modules.api_keys.service import ensure_default_key
+
+    db = get_db()
+    cursor = await db.execute("SELECT id FROM users")
+    rows = await cursor.fetchall()
+    await cursor.close()
+    for row in rows:
+        await ensure_default_key(row["id"])
+    logger.info("default keys ensured for %d users", len(rows))
 
 
 @app.get("/health", response_model=HealthResponse)

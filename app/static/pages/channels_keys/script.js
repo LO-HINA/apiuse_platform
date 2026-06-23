@@ -273,6 +273,15 @@ document.addEventListener('DOMContentLoaded', function () {
         var tdActions = document.createElement('td');
         tdActions.className = 'actions-cell';
 
+        var testBtn = document.createElement('button');
+        testBtn.className = 'ghost-btn test-btn';
+        testBtn.type = 'button';
+        testBtn.textContent = '测试';
+        (function (kId, btn, cell) {
+            btn.addEventListener('click', function () { testKey(kId, btn, cell); });
+        })(key.id, testBtn, tdActions);
+        tdActions.appendChild(testBtn);
+
         var editBtn = document.createElement('button');
         editBtn.className = 'ghost-btn';
         editBtn.type = 'button';
@@ -461,6 +470,55 @@ document.addEventListener('DOMContentLoaded', function () {
         } finally {
             eyeBtnEl.disabled = false;
         }
+    }
+
+    var pendingTests = {};
+
+    async function testKey(keyId, btn, cell) {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        var origText = btn.textContent;
+        btn.textContent = '测试中...';
+
+        var oldPill = cell.querySelector('.test-pill');
+        if (oldPill) oldPill.remove();
+
+        var controller = new AbortController();
+        pendingTests[keyId] = controller;
+        var timer = setTimeout(function () { controller.abort(); }, 10000);
+
+        var pill = document.createElement('span');
+        pill.className = 'test-pill';
+
+        try {
+            var result = await api('/api/keys/' + keyId + '/test', {
+                method: 'POST',
+                signal: controller.signal,
+            });
+            if (result.success) {
+                pill.classList.add('success');
+                pill.textContent = '\u2713 ' + result.latency_ms + 'ms';
+            } else {
+                pill.classList.add('failure');
+                pill.textContent = '\u2717 ' + (result.error || '失败');
+            }
+        } catch (err) {
+            pill.classList.add('failure');
+            if (err.name === 'AbortError') {
+                pill.textContent = '\u2717 超时';
+            } else {
+                pill.textContent = '\u2717 ' + (err.message || '错误');
+            }
+        } finally {
+            clearTimeout(timer);
+            delete pendingTests[keyId];
+            btn.disabled = false;
+            btn.textContent = origText;
+        }
+
+        cell.insertBefore(pill, btn.nextSibling);
+        setTimeout(function () { pill.classList.add('fade-out'); }, 3000);
+        setTimeout(function () { if (pill.parentNode) pill.remove(); }, 4000);
     }
 
     function showNotice(message, isError) {

@@ -85,7 +85,7 @@ async def chat_stream(
 
         try:
             async for token in chat_service.stream_tokens(
-                user_message=message, history=history, model=model,
+                user_message=message, history=history, model=model, user_id=user_id,
             ):
                 if await request.is_disconnected():
                     cancelled = True

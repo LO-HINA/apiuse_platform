@@ -44,6 +44,9 @@ async def init_db() -> None:
     await _db.executescript(_SCHEMA_SQL)
     await _db.commit()
 
+    # 迁移：为已有 api_keys 表补加 is_default 列
+    await _migrate_add_is_default(_db)
+
     # 从旧 JSON 文件迁移历史数据(幂等,已有数据不覆盖)
     await _migrate_json_data(_db)
 
@@ -53,6 +56,16 @@ async def init_db() -> None:
 # ---------------------------------------------------------------------------
 # 旧 JSON → SQLite 数据迁移
 # ---------------------------------------------------------------------------
+
+async def _migrate_add_is_default(db: aiosqlite.Connection) -> None:
+    """为已有 api_keys 表补加 is_default 列，幂等。"""
+    try:
+        await db.execute("ALTER TABLE api_keys ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0")
+        await db.commit()
+        logger.info("migrate: added is_default column to api_keys")
+    except aiosqlite.OperationalError:
+        pass  # 列已存在
+
 
 async def _migrate_json_data(db: aiosqlite.Connection) -> None:
     """从旧 JSON 文件迁移数据到 SQLite,幂等——已有记录跳过不覆盖。"""
@@ -314,6 +327,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     quota INTEGER NOT NULL DEFAULT 0,
     used_quota INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
+    is_default INTEGER NOT NULL DEFAULT 0,
     key_encrypted TEXT,
     expires_at TEXT,
     created_at TEXT NOT NULL,

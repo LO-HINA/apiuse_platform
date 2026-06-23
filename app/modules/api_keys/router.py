@@ -10,6 +10,7 @@ from app.modules.api_keys.schemas import (
     ApiKeyCreateResponse,
     ApiKeyPublic,
     ApiKeyRevealResponse,
+    ApiKeyTestResponse,
     ApiKeyUpdateRequest,
 )
 from app.modules.api_keys import crud, service
@@ -32,6 +33,14 @@ async def admin_delete_key(
     key_id: str,
     _admin: Annotated[UserRecord, Depends(get_admin_user)],
 ) -> None:
+    existing = await crud.get(key_id)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
+    if existing.is_default:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="默认密钥不可删除",
+        )
     deleted = await service.delete_key(key_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
@@ -102,6 +111,22 @@ async def delete_my_key(
     existing = await crud.get(key_id)
     if existing is None or existing.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
+    if existing.is_default:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="默认密钥不可删除",
+        )
     deleted = await service.delete_key(key_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
+
+
+@user_router.post("/{key_id}/test", response_model=ApiKeyTestResponse)
+async def test_key(
+    key_id: str,
+    current_user: Annotated[UserRecord, Depends(get_authenticated_user)],
+) -> ApiKeyTestResponse:
+    result = await service.test_key_connectivity(key_id, current_user.id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
+    return result
