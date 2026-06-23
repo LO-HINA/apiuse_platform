@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     loadUserInfo();
-    initModelSelector().then(() => restoreOrStart());
+    initModelSelector().then(() => restoreOrStart()).catch(err => console.error('restore failed', err));
 
     // ------------------------------------------------------------------
     // 模型选择器
@@ -212,29 +212,33 @@ document.addEventListener('DOMContentLoaded', () => {
     async function restoreOrStart() {
         const savedId = sessionStorage.getItem(SESSION_KEY);
         if (!savedId) {
-            // 新标签页，从头开始
             currentSessionId = null;
             return;
         }
-        // 从后端拉历史消息
         try {
             const token = getAccessToken();
             const res = await fetch(`/api/sessions/${savedId}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) {
-                // 会话已删除或无权访问，清除记录重新开始
                 sessionStorage.removeItem(SESSION_KEY);
                 currentSessionId = null;
                 return;
             }
             const detail = await res.json();
             currentSessionId = detail.session_id;
+
+            // 先切到聊天布局（让 chat-container 变 display:flex）
+            chatMain.classList.add('is-chatting');
+
+            // 再渲染消息（此时 scrollHeight 正常，scrollToBottom 才有效）
             chatContainer.innerHTML = '';
             for (const msg of (detail.messages || [])) {
                 appendMessage(msg.role, msg.content);
             }
-            chatMain.classList.add('is-chatting');
+
+            // 兜底再滚一次
+            scrollToBottom();
             messageInput.focus();
         } catch (err) {
             // 网络问题不做处理，用户可手动开始新聊天

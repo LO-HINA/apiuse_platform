@@ -157,12 +157,28 @@ async def bulk_import_channels(raw_text: str) -> ChannelBulkImportResponse:
     )
 
 
-async def select_channel(*, exclude_ids: set[str] | None = None) -> ChannelConfig:
+async def select_channel(
+    *, exclude_ids: set[str] | None = None, model: str | None = None,
+) -> ChannelConfig:
     channels = await crud.list_all()
-    usable = scheduler.usable_channels(channels, exclude_ids=exclude_ids)
+
+    # 先按模型过滤——如果指定了 model 但没有 channel 支持，直接报模型级错误
+    if model:
+        model_usable = scheduler.usable_channels(
+            channels, exclude_ids=None, model=model,
+        )
+        if not model_usable:
+            raise ChannelPoolError(f"没有 channel 支持模型 '{model}'，请检查通道配置")
+
+    usable = scheduler.usable_channels(channels, exclude_ids=exclude_ids, model=model)
     selected = scheduler.pick_weighted(usable)
     if selected is None:
-        raise ChannelPoolError("没有可用的上游 channel,请检查通道配置或等待黑名单过期")
+        if model:
+            raise ChannelPoolError(
+                f"支持模型 '{model}' 的 channel 当前都不可用"
+                "（已禁用或被拉黑），请稍后重试"
+            )
+        raise ChannelPoolError("没有可用的上游 channel，请检查通道配置或等待黑名单过期")
     logger.info("channel selected: channel=%s", selected.safe_label())
     return selected
 

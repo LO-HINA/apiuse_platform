@@ -109,6 +109,15 @@ async def chat_stream(
                     "stream chat done: session_id=%s reply_len=%d",
                     current_session_id, len(full_reply),
                 )
+            elif full_reply:
+                await chat_service.persist_assistant(
+                    session_id=current_session_id,
+                    content=full_reply,
+                )
+                logger.info(
+                    "stream chat interrupted (partial saved): session_id=%s reply_len=%d",
+                    current_session_id, len(full_reply),
+                )
 
         except asyncio.CancelledError:
             # 客户端断开 / 服务端 shutdown 时由 Starlette 抛出,必须 raise 出去

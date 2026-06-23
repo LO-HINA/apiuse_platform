@@ -69,9 +69,14 @@ async def _log_call(
 # ---------------------------------------------------------------------------
 
 
-async def _raise_pool_exhausted(failures: list[object]) -> None:
+async def _raise_pool_error(
+    failures: list[object], *, first_error: Exception | None = None,
+) -> None:
+    """兜底报错——优先透传 select_channel 的原始错误（如模型不支持）。"""
     if failures:
         logger.warning("relay channel pool exhausted: failures=%s", failures)
+    if first_error is not None:
+        raise first_error from None
     raise channels_service.ChannelPoolError(
         "所有上游 channel 都不可用，请稍后重试或检查通道配置"
     )
@@ -88,9 +93,11 @@ async def execute_non_stream(
 
     while True:
         try:
-            channel = await channels_service.select_channel(exclude_ids=tried_ids)
-        except channels_service.ChannelPoolError:
-            await _raise_pool_exhausted(failures)
+            channel = await channels_service.select_channel(
+                exclude_ids=tried_ids, model=request.model,
+            )
+        except channels_service.ChannelPoolError as exc:
+            await _raise_pool_error(failures, first_error=exc)
 
         tried_ids.add(channel.id)
         adapter = get_adapter(channel.provider_type)
@@ -136,9 +143,11 @@ async def execute_stream(
 
     while True:
         try:
-            channel = await channels_service.select_channel(exclude_ids=tried_ids)
-        except channels_service.ChannelPoolError:
-            await _raise_pool_exhausted(failures)
+            channel = await channels_service.select_channel(
+                exclude_ids=tried_ids, model=request.model,
+            )
+        except channels_service.ChannelPoolError as exc:
+            await _raise_pool_error(failures, first_error=exc)
             return
 
         tried_ids.add(channel.id)

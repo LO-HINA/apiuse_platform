@@ -20,9 +20,10 @@ def usable_channels(
     channels: list[ChannelConfig],
     *,
     exclude_ids: set[str] | None = None,
+    model: str | None = None,
     now: datetime | None = None,
 ) -> list[ChannelConfig]:
-    """过滤掉 disabled、已尝试、仍在黑名单窗口内的 channel。"""
+    """过滤掉 disabled、已尝试、仍在黑名单、以及不匹配模型的 channel。"""
     excluded = exclude_ids or set()
     current = now or _now()
     usable: list[ChannelConfig] = []
@@ -35,6 +36,10 @@ def usable_channels(
             continue
         if channel.weight <= 0:
             continue
+        # 模型过滤：有 models 列表时只匹配列表内的 + model_redirect 内的
+        if model and channel.models:
+            if model not in channel.models and model not in channel.model_redirect:
+                continue
         usable.append(channel)
     return usable
 
