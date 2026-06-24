@@ -75,7 +75,7 @@ function renderSidebar(options) {
                         '</svg>' +
                     '</button>' +
                     '<div class="nav-sublist' + (isChannelsExpanded ? ' expanded' : '') + '">' +
-                        '<a class="nav-subitem' + (opts.activePath === '/channels/accounts' ? ' active' : '') + '" href="/channels/accounts">渠道账号</a>' +
+                        '<a class="nav-subitem' + (opts.activePath === '/channels/accounts' ? ' active' : '') + '" href="/channels/accounts" id="admin-nav-link" style="display:none">渠道账号</a>' +
                         '<a class="nav-subitem' + (opts.activePath === '/channels/keys' ? ' active' : '') + '" href="/channels/keys">密钥管理</a>' +
                         '<a class="nav-subitem' + (opts.activePath === '/channels/usage' ? ' active' : '') + '" href="/channels/usage">用量管理</a>' +
                     '</div>' +
@@ -157,6 +157,10 @@ function _loadUser() {
             var name = u.display_name || u.username;
             nameEl.textContent = name;
             avatarEl.textContent = name.charAt(0).toUpperCase();
+            if (u.role === 'admin') {
+                var adminLink = document.getElementById('admin-nav-link');
+                if (adminLink) adminLink.style.display = '';
+            }
         })
         .catch(function () {
             localStorage.removeItem('access_token');

@@ -49,7 +49,6 @@ document.addEventListener('DOMContentLoaded', function () {
         importSubmitBtn: document.getElementById('import-submit-btn'),
         searchInput: document.getElementById('search-input'),
         bulkInput: document.getElementById('bulk-input'),
-        type: document.getElementById('channel-type'),
         name: document.getElementById('channel-name'),
         key: document.getElementById('channel-key'),
         batch: document.getElementById('channel-batch'),
@@ -236,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         var basePayload = {
-            provider_type: el.type.value,
+            provider_type: el.group.value,
             base_url: emptyToNull(el.baseUrl.value),
             organization: emptyToNull(el.organization.value),
             models: [selectedModel],
@@ -284,8 +283,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function resetForm() {
         el.form.reset();
-        el.type.value = 'openai_compat';
-        el.group.value = 'default';
+        el.group.value = 'openai_compat';
         state.redirectMode = 'visual';
         el.redirectVisual.innerHTML = '';
         el.redirectManual.value = '';

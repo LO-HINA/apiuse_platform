@@ -14,7 +14,7 @@ class ChannelConfig(BaseModel):
 
     id: str = Field(..., min_length=1, max_length=80)
     name: str = Field(..., min_length=1, max_length=120)
-    provider_type: Literal["openai_compat"] = "openai_compat"
+    provider_type: Literal["openai_compat", "anthropic"] = "openai_compat"
     base_url: str = Field(..., min_length=1, max_length=500)
     api_key: str = Field(..., min_length=1, repr=False)
     organization: str | None = Field(default=None, max_length=120)
@@ -74,7 +74,7 @@ class ChannelCreateRequest(BaseModel):
 
     id: str | None = Field(default=None, min_length=1, max_length=80)
     name: str = Field(..., min_length=1, max_length=120)
-    provider_type: Literal["openai_compat"] = "openai_compat"
+    provider_type: Literal["openai_compat", "anthropic"] = "openai_compat"
     base_url: str | None = Field(default=None, max_length=500)
     api_key: SecretStr = Field(..., min_length=1)
     organization: str | None = Field(default=None, max_length=120)
@@ -110,12 +110,62 @@ class ChannelCreateRequest(BaseModel):
         }
 
 
+class ChannelUpdateRequest(BaseModel):
+    """Admin request for updating an existing channel's static fields.
+
+    所有字段可选——只更新提交的字段;未提交字段保持原值。
+    api_key 提交明文(管理后台已鉴权),落盘时仍以明文存于 auth 文件。
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    provider_type: Literal["openai_compat", "anthropic"] | None = None
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: SecretStr | None = None
+    organization: str | None = Field(default=None, max_length=120)
+    models: list[str] | None = None
+    custom_model_name: str | None = Field(default=None, max_length=160)
+    group: str | None = Field(default=None, min_length=1, max_length=80)
+    model_redirect: dict[str, str] | None = None
+    weight: int | None = Field(default=None, ge=1, le=1000)
+    enabled: bool | None = None
+
+    @field_validator("base_url")
+    @classmethod
+    def _normalize_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().rstrip("/")
+        if not normalized:
+            return None
+        return normalized
+
+    @field_validator("models")
+    @classmethod
+    def _normalize_models(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        return [item.strip() for item in value if item.strip()]
+
+    @field_validator("model_redirect")
+    @classmethod
+    def _normalize_model_redirect(
+        cls, value: dict[str, str] | None
+    ) -> dict[str, str] | None:
+        if value is None:
+            return None
+        return {
+            key.strip(): target.strip()
+            for key, target in value.items()
+            if key.strip() and target.strip()
+        }
+
+
 class ChannelPublic(BaseModel):
     """Browser-safe channel response."""
 
     id: str
     name: str
-    provider_type: Literal["openai_compat"]
+    provider_type: Literal["openai_compat", "anthropic"]
     base_url: str
     api_key_masked: str
     organization: str | None
@@ -145,7 +195,7 @@ class ChannelBulkImportResponse(BaseModel):
 
 
 class ChannelModelOptionsResponse(BaseModel):
-    provider_type: Literal["openai_compat"] = "openai_compat"
+    provider_type: Literal["openai_compat", "anthropic"] = "openai_compat"
     models: list[str]
 
 

@@ -17,6 +17,7 @@ from app.core.exceptions import register_exception_handlers
 from app.core.log_config import setup_logging
 from app.core.middleware import RequestIDMiddleware
 from app.modules.adapter.base import register_adapter
+from app.modules.adapter.anthropic_compat_adapter import AnthropicCompatAdapter
 from app.modules.adapter.openai_compat_adapter import OpenAICompatAdapter
 from app.modules.adapter.service import set_http_client
 from app.modules.api_keys.router import router as api_keys_admin_router
@@ -95,6 +96,7 @@ app = FastAPI(
 
 # 注册 Provider Adapter（模块级，import 即生效）
 register_adapter(OpenAICompatAdapter())
+register_adapter(AnthropicCompatAdapter())
 
 # 中间件后注册的在外层、先执行;RequestID 要最先跑,所以最后注册
 app.add_middleware(

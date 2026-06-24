@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="/static/pages/channels_accounts/style.css">
 </head>
 <body>
+    <script>
+    (function(){var t=localStorage.getItem('access_token')||localStorage.getItem('token');if(!t)window.location.href='/login';else try{var p=JSON.parse(atob(t.split('.')[1]));if(p.role!=='admin')window.location.href='/'}catch(e){window.location.href='/login'}})();
+    </script>
     <div class="app-container">
         <main class="channels-main">
             <header class="channels-header">
@@ -89,10 +92,12 @@
 
             <form id="channel-form" class="modal-form" novalidate>
                 <div class="form-grid">
-                    <label>
-                        <span>类型 <b>*</b></span>
-                        <select id="channel-type" name="provider_type" required>
-                            <option value="openai_compat" selected>OpenAI</option>
+                    <!-- 分组放到第一行，独占整行 -->
+                    <label class="full-field">
+                        <span>账号分组</span>
+                        <select id="channel-group" name="group">
+                            <option value="openai_compat" selected>openai_compat</option>
+                            <option value="anthropic">anthropic</option>
                         </select>
                     </label>
 
@@ -130,15 +135,6 @@
                     <label>
                         <span>自定义模型</span>
                         <input id="channel-custom-model" name="custom_model_name" type="text" placeholder="my-model，额外模型名" autocomplete="off">
-                    </label>
-
-                    <label>
-                        <span>分组</span>
-                        <select id="channel-group" name="group">
-                            <option value="default" selected>default</option>
-                            <option value="test">test</option>
-                            <option value="pro">pro</option>
-                        </select>
                     </label>
 
                     <div class="model-tools">

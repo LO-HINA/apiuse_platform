@@ -2,7 +2,12 @@
 
 单例连接,通过 get_db() 获取 aiosqlite.Connection。
 init_db() 在 lifespan 启动阶段调用一次,建表并启用 WAL,
-随后自动从旧 JSON 文件迁移历史数据(幂等)。
+随后自动从旧 JSON 文件迁移历史用户数据(幂等)。
+
+channel 静态信息走文件持久化(data/channels/auth/*.json),由
+channels.crud 直接读写;运行时状态(success/failure/blacklist)走
+channels_runtime 表。启动时会把旧 channels 表的 runtime 计数一次性
+搬运到 channels_runtime(幂等),旧 channels 表留作孤儿表不再读写。
 """
 from __future__ import annotations
 
@@ -11,8 +16,6 @@ import logging
 from pathlib import Path
 
 import aiosqlite
-
-from app.core.crypto import encrypt
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ def get_db() -> aiosqlite.Connection:
 
 
 async def init_db() -> None:
-    """初始化数据库:创建连接、启用 WAL 与外键、建表、迁移旧 JSON 数据。幂等,多次调用安全。"""
+    """初始化数据库:创建连接、启用 WAL 与外键、建表、迁移旧数据。幂等,多次调用安全。"""
     global _db
 
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -47,8 +50,11 @@ async def init_db() -> None:
     # 迁移：为已有 api_keys 表补加 is_default 列
     await _migrate_add_is_default(_db)
 
-    # 从旧 JSON 文件迁移历史数据(幂等,已有数据不覆盖)
+    # 从旧 users.json 迁移历史用户(幂等,已有数据不覆盖)
     await _migrate_json_data(_db)
+
+    # 一次性把旧 channels 表的 runtime 计数搬到 channels_runtime(幂等)
+    await _migrate_channels_runtime(_db)
 
     logger.info("database initialized: file=%s", _DB_FILE)
 
@@ -68,10 +74,13 @@ async def _migrate_add_is_default(db: aiosqlite.Connection) -> None:
 
 
 async def _migrate_json_data(db: aiosqlite.Connection) -> None:
-    """从旧 JSON 文件迁移数据到 SQLite,幂等——已有记录跳过不覆盖。"""
+    """从旧 JSON 文件迁移用户数据到 SQLite,幂等——已有记录跳过不覆盖。
+
+    channel 静态信息已改走文件持久化(data/channels/auth/*.json),由
+    channels.crud 直接读取;api_keys 早已落入 SQLite,不再从
+    data/channels/keys/ 迁移。这里只保留 users.json → users 的迁移。
+    """
     await _migrate_users(db)
-    await _migrate_channels(db)
-    await _migrate_api_keys(db)
 
 
 async def _migrate_users(db: aiosqlite.Connection) -> None:
@@ -122,141 +131,39 @@ async def _migrate_users(db: aiosqlite.Connection) -> None:
     logger.info("migrate users: done")
 
 
-async def _migrate_channels(db: aiosqlite.Connection) -> None:
-    """从 data/channels/auth/*.json 迁移 channel。按 id 判重, api_key 经 Fernet 加密。"""
-    auth_dir = _DATA_DIR / "channels" / "auth"
-    if not auth_dir.exists():
+async def _migrate_channels_runtime(db: aiosqlite.Connection) -> None:
+    """一次性把旧 `channels` 表的 runtime 计数搬到 `channels_runtime`。
+
+    channel 静态信息改走文件持久化后,旧 channels 表只剩 runtime 计数还有价值。
+    这里把 success_count/failure_count/blacklisted_until 搬到新表,幂等
+    (INSERT OR IGNORE)。旧 channels 表自身不删,留作孤儿表(不再读写)。
+
+    全新 data.db(无旧 channels 表)时本函数为 no-op。
+    """
+    cursor = await db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='channels'"
+    )
+    row = await cursor.fetchone()
+    await cursor.close()
+    if row is None:
         return
 
-    for json_file in sorted(auth_dir.glob("*.json")):
-        ch: dict = json.loads(json_file.read_text(encoding="utf-8"))
-        ch_id = ch["id"]
-
-        cursor = await db.execute("SELECT id FROM channels WHERE id = ?", (ch_id,))
-        if await cursor.fetchone():
-            await cursor.close()
-            logger.info("migrate channels: skip existing id=%s", ch_id)
-            continue
-        await cursor.close()
-
-        # 加密 API key
-        raw_key: str = ch.get("key") or ""
-        encrypted_key = encrypt(raw_key) if raw_key else ""
-
-        # JSON 序列化列表/字典字段
-        models_json = json.dumps(ch.get("models", []))
-        redirect_json = json.dumps(ch.get("model_redirect", {}))
-
-        enabled = 1 if ch.get("enabled", True) else 0
-
+    cursor = await db.execute(
+        "SELECT id, success_count, failure_count, blacklisted_until FROM channels"
+    )
+    rows = await cursor.fetchall()
+    await cursor.close()
+    for r in rows:
         await db.execute(
-            """INSERT INTO channels (id, name, provider_type, base_url, api_key,
-               organization, "group", models, model_redirect, weight, enabled,
-               success_count, failure_count, blacklisted_until, created_at,
-               updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                ch_id,
-                ch.get("name", ""),
-                ch.get("provider_type", "openai_compat"),
-                ch.get("url", ""),
-                encrypted_key,
-                ch.get("organization"),
-                ch.get("group", "default"),
-                models_json,
-                redirect_json,
-                ch.get("weight", 1),
-                enabled,
-                ch.get("success_count", 0),
-                ch.get("failure_count", 0),
-                ch.get("blacklisted_until"),
-                ch["created_at"],
-                ch["updated_at"],
-            ),
+            "INSERT OR IGNORE INTO channels_runtime "
+            "(channel_id, success_count, failure_count, blacklisted_until) "
+            "VALUES (?, ?, ?, ?)",
+            (r["id"], r["success_count"], r["failure_count"], r["blacklisted_until"]),
         )
-        logger.info("migrate channels: inserted id=%s name=%s", ch_id, ch.get("name"))
-
     await db.commit()
-    logger.info("migrate channels: done")
-
-
-async def _migrate_api_keys(db: aiosqlite.Connection) -> None:
-    """从 data/channels/keys/*.json 迁移 API key。按 id 和 key_hash 判重,验证 user_id 外键。"""
-    keys_dir = _DATA_DIR / "channels" / "keys"
-    if not keys_dir.exists():
-        return
-
-    for json_file in sorted(keys_dir.glob("*.json")):
-        key_list: list[dict] = json.loads(json_file.read_text(encoding="utf-8"))
-        for ak in key_list:
-            key_id = ak["id"]
-            key_hash = ak.get("key_hash", "")
-
-            # 按 id 判重
-            cursor = await db.execute("SELECT id FROM api_keys WHERE id = ?", (key_id,))
-            if await cursor.fetchone():
-                await cursor.close()
-                logger.info("migrate api_keys: skip existing id=%s", key_id)
-                continue
-            await cursor.close()
-
-            # 按 key_hash 判重
-            if key_hash:
-                cursor = await db.execute(
-                    "SELECT id FROM api_keys WHERE key_hash = ?", (key_hash,)
-                )
-                if await cursor.fetchone():
-                    await cursor.close()
-                    logger.info(
-                        "migrate api_keys: skip existing key_hash=%s...", key_hash[:12]
-                    )
-                    continue
-                await cursor.close()
-
-            # 验证关联的 user_id 是否存在
-            user_id = ak.get("user_id", "")
-            if user_id:
-                cursor = await db.execute(
-                    "SELECT id FROM users WHERE id = ?", (user_id,)
-                )
-                if not await cursor.fetchone():
-                    await cursor.close()
-                    logger.warning(
-                        "migrate api_keys: skip id=%s — user_id=%s not found",
-                        key_id,
-                        user_id,
-                    )
-                    continue
-                await cursor.close()
-
-            models_json = json.dumps(ak.get("models", []))
-
-            await db.execute(
-                """INSERT INTO api_keys (id, user_id, key_hash, key_prefix,
-                   key_masked, name, models, quota, used_quota, status,
-                   key_encrypted, expires_at, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    key_id,
-                    user_id,
-                    key_hash,
-                    ak.get("key_prefix", "sk-"),
-                    ak.get("key_masked", ""),
-                    ak.get("name", ""),
-                    models_json,
-                    ak.get("quota", 0),
-                    ak.get("used_quota", 0),
-                    ak.get("status", "active"),
-                    None,  # key_encrypted — 旧 JSON 不含明文 key
-                    ak.get("expires_at"),
-                    ak["created_at"],
-                    ak["updated_at"],
-                ),
-            )
-            logger.info("migrate api_keys: inserted id=%s name=%s", key_id, ak.get("name"))
-
-    await db.commit()
-    logger.info("migrate api_keys: done")
+    logger.info(
+        "migrate channels_runtime: seeded %d rows from legacy channels table", len(rows)
+    )
 
 
 async def close_db() -> None:
@@ -297,23 +204,11 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS channels (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    provider_type TEXT NOT NULL DEFAULT 'openai_compat',
-    base_url TEXT NOT NULL DEFAULT '',
-    api_key TEXT NOT NULL DEFAULT '',
-    organization TEXT,
-    "group" TEXT NOT NULL DEFAULT 'default',
-    models TEXT NOT NULL DEFAULT '[]',
-    model_redirect TEXT NOT NULL DEFAULT '{}',
-    weight INTEGER NOT NULL DEFAULT 1,
-    enabled INTEGER NOT NULL DEFAULT 1,
+CREATE TABLE IF NOT EXISTS channels_runtime (
+    channel_id TEXT PRIMARY KEY,
     success_count INTEGER NOT NULL DEFAULT 0,
     failure_count INTEGER NOT NULL DEFAULT 0,
-    blacklisted_until TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    blacklisted_until TEXT
 );
 
 CREATE TABLE IF NOT EXISTS api_keys (

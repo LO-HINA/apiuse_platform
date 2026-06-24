@@ -14,6 +14,7 @@ from app.modules.channels.schemas import (
     ChannelFailureSnapshot,
     ChannelModelOptionsResponse,
     ChannelPublic,
+    ChannelUpdateRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,66 @@ async def create_channel(payload: ChannelCreateRequest) -> ChannelPublic:
     created = await crud.create(channel)
     logger.info("channel created: channel=%s", created.safe_label())
     return _public(created)
+
+
+async def update_channel(
+    channel_id: str, payload: ChannelUpdateRequest,
+) -> ChannelPublic | None:
+    """更新 channel 静态字段(写文件)。不存在返回 None。
+
+    api_key 以明文提交(管理后台已鉴权),落盘时明文存于 auth 文件。
+    custom_model_name 仅在同时提交 models 时追加生效(与 create 一致)。
+    """
+    fields: dict = {}
+    if payload.name is not None:
+        fields["name"] = payload.name
+    if payload.provider_type is not None:
+        fields["provider_type"] = payload.provider_type
+    if payload.base_url is not None:
+        fields["base_url"] = payload.base_url
+    if payload.api_key is not None:
+        fields["api_key"] = payload.api_key.get_secret_value()
+    if payload.organization is not None:
+        fields["organization"] = payload.organization
+    if payload.models is not None:
+        models = list(payload.models)
+        if payload.custom_model_name and payload.custom_model_name not in models:
+            models.append(payload.custom_model_name)
+        fields["models"] = models
+    if payload.group is not None:
+        fields["group"] = payload.group
+    if payload.model_redirect is not None:
+        fields["model_redirect"] = payload.model_redirect
+    if payload.weight is not None:
+        fields["weight"] = payload.weight
+    if payload.enabled is not None:
+        fields["enabled"] = payload.enabled
+
+    if not fields:
+        current = await crud.get(channel_id)
+        return _public(current) if current else None
+
+    updated = await crud.update_static(channel_id, **fields)
+    if updated is None:
+        return None
+    logger.info("channel updated: channel=%s", updated.safe_label())
+    return _public(updated)
+
+
+async def delete_channel(channel_id: str) -> bool:
+    """删 channel(文件 + runtime 行)。不存在返回 False。"""
+    deleted = await crud.delete(channel_id)
+    if deleted:
+        logger.info("channel deleted: id=%s", channel_id)
+    return deleted
+
+
+async def get_channel_for_export(channel_id: str) -> ChannelConfig | None:
+    """返回含明文 api_key 的完整 ChannelConfig,仅供 export 下载端点使用。
+
+    注意:调用方必须确保响应只走文件下载(不进入浏览器可枚举的 JSON 列表)。
+    """
+    return await crud.get(channel_id)
 
 
 def _parse_models(raw: str | None) -> list[str]:
