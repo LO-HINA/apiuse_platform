@@ -26,59 +26,65 @@ Claude 在本项目中的角色:
 
 ```
 app/
-├── main.py                       # FastAPI 入口、lifespan、路由注册
+├── main.py                       # FastAPI 入口、lifespan、路由注册、静态页挂载
 ├── api/
-│   └── deps.py                   # 跨领域依赖:get_current_user / get_admin_user
+│   └── deps.py                   # 跨领域依赖:get_authenticated_user / get_admin_user / verify_api_key_dep
 │
 ├── core/                         # 横切关注点
-│   ├── config.py                 # settings + .env + SecretStr
-│   ├── logging.py                # 日志格式 + request_id 注入
-│   ├── middleware.py             # RequestIDMiddleware
-│   ├── exceptions.py             # 全局异常处理
-│   ├── security.py               # JWT + 密码哈希
+│   ├── config.py                 # settings + .env + SecretStr(含 JWT/ENCRYPTION_KEY 启动校验)
 │   ├── context.py                # request_id ContextVar
-│   ├── database.py               # SQLite 连接管理 + 建表
-│   └── crypto.py                 # API Key 加密/解密
+│   ├── crypto.py                 # API Key 加密/解密(Fernet)
+│   ├── database.py               # SQLite 连接管理 + WAL + 建表 + 旧 JSON 迁移
+│   ├── exceptions.py             # 全局异常处理
+│   ├── log_config.py             # 日志格式 + request_id 注入
+│   ├── middleware.py             # RequestIDMiddleware
+│   └── security.py               # JWT + Argon2 密码哈希
 │
-├── storage/                      # 通用存储能力 (SQLite 持久化)
+├── storage/                      # 通用存储能力(全部走 SQLite)
 │   └── repos.py                  # UserRepo / SessionRepo / MessageRepo
 │
 ├── modules/                      # 领域模块,每个目录自治
-│   ├── auth/                     # 注册 / 登录 / me
+│   ├── auth/                     # 注册 / 登录 / me / status
 │   │   ├── router.py
 │   │   ├── service.py
 │   │   ├── crud.py
 │   │   └── schemas.py
 │   │
-│   ├── sessions/                 # 会话元信息 CRUD
+│   ├── sessions/                 # 会话元信息 CRUD + LRU/TTL 清理
 │   │   ├── router.py
 │   │   ├── service.py
 │   │   ├── crud.py
 │   │   └── schemas.py
 │   │
 │   ├── messages/                 # 消息存取 + 滑窗 trim
-│   │   ├── service.py
 │   │   ├── crud.py
 │   │   └── schemas.py
 │   │
-│   ├── chat/                     # SSE 编排:sessions + messages + adapter
-│   │   ├── router.py             # /api/chat/stream
+│   ├── chat/                     # 浏览器 SSE 聊天:sessions + messages + adapter
+│   │   ├── router.py             # /api/chat/stream(断连存档)
 │   │   ├── service.py            # prepare_stream / persist_assistant
-│   │   ├── stream.py             # SSE 帧封装
 │   │   └── schemas.py
 │   │
-    │   ├── channels/                 # 号池管理 + 调度
-    │   │   ├── router.py             # /api/channels/models(公开) + /api/admin/channels/*(管理)
-    │   │   ├── service.py
-    │   │   ├── crud.py
-    │   │   ├── scheduler.py          # 加权随机 + failover + 黑名单
-    │   │   └── schemas.py
-    │   │
-    │   ├── api_keys/                 # API Key 管理
-    │   │   ├── router.py             # /api/keys(用户) + /api/admin/keys(管理)
-    │   │   ├── service.py            # 生成/验证/CRUD
-    │   │   ├── crud.py
-    │   │   └── schemas.py
+│   ├── channels/                 # 号池管理 + 调度
+│   │   ├── router.py             # /api/channels/models(公开) + /api/admin/channels/*(管理)
+│   │   ├── service.py
+│   │   ├── crud.py
+│   │   ├── scheduler.py          # 加权随机 + failover + 黑名单 + model-aware 过滤
+│   │   └── schemas.py
+│   │
+│   ├── api_keys/                 # API Key 管理
+│   │   ├── router.py             # /api/keys(用户) + /api/admin/keys(管理) + test-connectivity
+│   │   ├── service.py            # 生成/验证/CRUD/ensure_default_key
+│   │   ├── crud.py
+│   │   └── schemas.py
+│   │
+│   ├── relay/                    # OpenAI 兼容中继
+│   │   ├── router.py             # POST /v1/chat/completions(API Key 鉴权 + token tracking)
+│   │   ├── service.py            # execute_stream / execute_non_stream + call_logs 记录
+│   │   └── schemas.py
+│   │
+│   ├── usage/                    # token 用量统计
+│   │   └── router.py             # /api/usage/{daily,detail,models} 查 call_logs
 │   │
 │   ├── adapter/                  # Provider Adapter 适配层
 │   │   ├── base.py               # ProviderAdapter 抽象基类 + 注册表
@@ -86,53 +92,32 @@ app/
 │   │   ├── openai_compat_adapter.py  # OpenAI 兼容协议 Adapter
 │   │   └── fake.py
 │   │
-│   ├── plugins/                  # 插件系统(M5)
-│   │   ├── router.py             # /api/plugins
-│   │   ├── service.py
-│   │   ├── registry.py           # 注册中心
-│   │   ├── executor.py           # 执行 + 沙箱
-│   │   ├── plugin_types.py
-│   │   ├── schemas.py
-│   │   └── builtin/
-│   │       ├── echo.py
-│   │       ├── calculator.py
-│   │       └── time_tool.py
-│   │
-│   ├── context/                  # 上下文构造(M6)
-│   │   ├── service.py
-│   │   ├── builder.py            # history + summary + memory 拼接
-│   │   └── schemas.py
-│   │
-│   ├── memory/                   # 长期记忆(M6)
-│   │   ├── router.py
-│   │   ├── service.py
-│   │   ├── crud.py
-│   │   └── schemas.py
-│   │
-│   └── model_logs/               # 调用日志(M6)
-│       ├── service.py
-│       ├── crud.py
-│       └── schemas.py
+│   ├── plugins/                  # 插件系统(规划中,目录已占位,仅 __init__.py)
+│   ├── context/                  # 上下文构造(规划中,目录已占位,仅 __init__.py)
+│   ├── memory/                   # 长期记忆(规划中,目录已占位,仅 __init__.py)
+│   └── model_logs/               # 调用日志(规划中,目录已占位,仅 __init__.py;当前用量走 call_logs 表)
 │
 └── static/
     ├── pages/
-    │   ├── chat/                 # 聊天测试页
+    │   ├── chat/                 # 聊天测试页(sessionStorage 会话恢复)
+    │   ├── auth/                 # 登录 / 注册页
+    │   ├── channels/             # /channels 入口(重定向到 /channels/accounts)
     │   ├── channels_accounts/    # 号池账户管理
     │   ├── channels_keys/        # 号池密钥管理
-    │   ├── channels_usage/       # 号池用量统计
-    │   └── admin/                # 号池管理后台(M3)
-    └── shared/                   # 公用 JS / CSS (sidebar 组件)
+    │   └── channels_usage/       # 号池用量统计
+    └── shared/                   # 公用 JS / CSS(sidebar 组件 + base.css)
 ```
 
 **依赖方向单向**(上层可调下层,反之禁止):
 
 ```
 modules/*           → storage / core
-modules/chat        → modules/sessions, modules/messages, modules/adapter, modules/context
-modules/channels    → modules/adapter
-modules/adapter → modules/channels (调度时拿 channel)
+modules/chat        → modules/sessions, modules/messages, modules/adapter
+modules/relay       → modules/channels, modules/adapter, modules/api_keys
+modules/adapter     → modules/channels (调度时拿 channel)
+modules/usage       → storage / core (直接查 call_logs)
 modules/api_keys    → storage (通过 crud)
-api/deps            → modules/auth (拿 user)
+api/deps            → modules/auth (拿 user) / modules/api_keys (verify_api_key_dep)
 ```
 
 横向跨模块只允许通过 `service.py` 暴露的函数,**不允许跨模块 import crud / models**。
@@ -143,29 +128,31 @@ api/deps            → modules/auth (拿 user)
 
 ### 3.1 已实现
 
-- `app/main.py` FastAPI 入口、lifespan 管 httpx 单例 + SQLite 初始化
-- `app/api/deps.py` 跨领域依赖:`get_authenticated_user`(统一认证)/ `get_optional_current_user` / `get_admin_user` / `PUBLIC_PATHS` 公开路径白名单
-- `app/core/database.py` SQLite 连接管理(WAL mode + foreign keys) + 5 表 DDL
+- `app/main.py` FastAPI 入口、lifespan 管 httpx 单例 + SQLite 初始化 + 为已有用户补建默认 API Key
+- `app/api/deps.py` 跨领域依赖:`get_authenticated_user`(统一认证)/ `get_optional_current_user` / `get_admin_user` / `verify_api_key_dep`(relay 用 API Key 鉴权)/ `PUBLIC_PATHS` 公开路径白名单
+- `app/core/database.py` SQLite 连接管理(WAL mode + foreign keys) + 建表 DDL(users/sessions/messages/channels/api_keys/call_logs) + 旧 JSON 幂等迁移(users/channels/api_keys)
 - `app/core/crypto.py` API Key 加密/解密(Fernet)
-- `app/modules/auth/` 注册 / 登录 / me,router 只管 HTTP,service 负责业务编排
-- `app/modules/sessions/` 会话 CRUD + `sessions.service` 所有权判断 + M2 LRU/TTL 消息体清理
+- `app/modules/auth/` 注册 / 登录 / me / status,router 只管 HTTP,service 负责业务编排
+- `app/modules/sessions/` 会话 CRUD + `sessions.service` 所有权判断 + LRU/TTL 消息体清理
 - `app/modules/messages/` 消息 CRUD + 单会话滑窗 trim
-- `app/modules/chat/` SSE 协议(首帧 session_id / token 事件 / 安全 error 事件 / `[DONE]`)
-- `app/modules/adapter/` fake + OpenAI-compatible provider + ProviderAdapter 抽象;真实模式走 M2 channel 池
-- `app/modules/channels/` channel CRUD + 加权随机 + 失败计数 + 临时黑名单 + admin API
-- `app/modules/api_keys/` API Key 生成(`sk-`前缀) / 哈希(SHA256) / 验证 / CRUD;管理 API
+- `app/modules/chat/` 浏览器 SSE 协议(首帧 session_id / token 事件 / 安全 error 事件 / `[DONE]`);**断连存档**:客户端中断时已产出部分仍落库
+- `app/modules/adapter/` fake + OpenAI-compatible provider + ProviderAdapter 抽象;真实模式走 channel 池
+- `app/modules/channels/` channel CRUD + 加权随机 + model-aware 过滤 + 失败计数 + 临时黑名单 + admin API + bulk-import
+- `app/modules/api_keys/` API Key 生成(`sk-`前缀) / 哈希(SHA256) / 验证 / CRUD / `ensure_default_key` / test-connectivity;管理 API
+- `app/modules/relay/` `POST /v1/chat/completions` OpenAI 兼容中继:API Key 鉴权 + 流式/非流式 + **token tracking**(落 `call_logs` + 累 `used_quota`)+ 配额校验
+- `app/modules/usage/` `/api/usage/{daily,detail,models}` 查 `call_logs` 做按日/按模型用量统计
 - `app/core/security.py` JWT 编解码 + Argon2 密码哈希
-- `app/core/config.py` `pydantic-settings` 读 .env,包含 M2 channel / LRU 参数
+- `app/core/config.py` `pydantic-settings` 读 .env,含 JWT/ENCRYPTION_KEY 启动校验 + M2 channel / LRU 参数
 - `app/storage/repos.py` `UserRepo` / `SessionRepo` / `MessageRepo`(全部已切 SQLite)
-- `app/static/` 原生 HTML/JS + sidebar 组件 + channels 管理三件套(accounts/keys/usage)
+- `app/static/` 原生 HTML/JS + sidebar 组件 + channels 管理三件套(accounts/keys/usage)+ auth 页 + sessionStorage 会话恢复
 
-### 3.2 M2/M3 当前边界
+### 3.2 当前边界
 
-- channels 模块已有 `router.py`:`/api/channels/models`(公开) + `/api/admin/channels/*`(管理员)
+- channels 模块已有 `router.py`:`/api/channels/models`(公开) + `/api/admin/channels/*`(管理员:list / model-options / create / reveal key / bulk-import)
 - channels admin UI 已有三件套:accounts / keys / usage
-- `POST /v1/chat/completions` 尚未实现(M4)
+- `POST /v1/chat/completions` **已实现**(M4,relay 模块):OpenAI SDK 可直接打通,API Key 鉴权 + token tracking + model-aware channel selection
 - 当前只支持 `provider_type="openai_compat"`;New-API / Anthropic / Gemini 等属于后续 Provider 适配
-- channel 配置通过管理后台创建,存储于 SQLite `channels` 表
+- channel 配置通过管理后台创建,存储于 SQLite `channels` 表;`data/channels/{auth,keys}/*.json` 为 M2.5 旧迁移源(启动时幂等迁移),`data/channels.json` 是更早期 M2 配置,代码已不再读取
 
 ---
 
@@ -251,12 +238,12 @@ api/deps            → modules/auth (拿 user)
 - `data/data.db` 整个 data/ .gitignore
 - 所有 `/api/*` 路由由 `get_authenticated_user` 统一守卫(路径白名单例外:`/api/auth/status`, `/api/auth/register`, `/api/auth/login`, `/api/channels/models`, `/health`)
 - 管理类 API 必须由 `get_admin_user` 依赖守住(chains through `get_authenticated_user`,基于 `role=admin`)
-- `/v1/*` 路径预留 API Key 鉴权(当前返回 501)
+- `/v1/*` 路径由 API Key 鉴权守卫(`verify_api_key_dep`,`/v1/chat/completions` 已落地)
 - 上游 API Key 不向前端透出,存储时经 Fernet 加密
 - Channel 响应里 api_key 字段 mask 成 `sk-***xxxx`
 - 浏览器前端不直接调上游模型,所有调用走后端代理
 - `JWT_SECRET` 启动期校验长度 >= 32,空值直接拒启动
-- `API_KEY_ENCRYPTION_KEY` 启动期自动生成(如果缺失),用于 Fernet 加解密
+- `ENCRYPTION_KEY` 启动期必须显式配置(空值直接拒启动),用于 Fernet 加解密上游 channel 的原始 API Key
 
 ---
 
@@ -269,7 +256,7 @@ api/deps            → modules/auth (拿 user)
 | **M2** ✅ | Channel + 加权随机 + failover 黑名单 + LRU/TTL + admin API + admin UI | 管理后台可视化管理 channel |
 | **M2.5** ✅ | SQLite 迁移 + 统一认证守卫 `get_authenticated_user` + API Key 模块 | 全量持久化;外键级联;新增路由默认需要认证 |
 | **M3** 🔄 | 管理 API + 管理后台 UI(`/static/pages/channels_*/`) | channels 三件套已完成;channels.admin 待完善 |
-| **M4** | OpenAI 兼容代理路由 `POST /v1/chat/completions` + Provider 抽象正式落地 | OpenAI SDK 能直接打通 |
+| **M4** ✅ | OpenAI 兼容中继 `POST /v1/chat/completions` + API Key 鉴权 + token tracking(`call_logs`)+ model-aware channel selection + chat 断连存档 | OpenAI SDK 能直接打通;`/v1/chat/completions` 流式/非流式可用 |
 | **M5** | 插件系统(plugins 模块 + builtin/echo/calculator/time)+ 前端插件管理页 | 聊天里能触发 echo 插件 |
 | **M6** | memory + model_logs + context builder(history + memory,summary 视情况) | 多轮对话能回忆;后台能看调用日志 |
 | **M7** | Docker + docker-compose(app + nginx) | `docker-compose up` 一键起 |

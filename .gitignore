@@ -1,0 +1,56 @@
+# ===== 环境变量与密钥 =====
+.env
+.env.local
+*.key
+*.pem
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+env/
+ENV/
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== 日志与临时文件 =====
+*.log
+logs/
+.DS_Store
+Thumbs.db
+
+# ===== 测试与构建产物 =====
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+node_modules/
+
+# ===== 持久化数据(含敏感字段) =====
+# users.json: 含密码哈希
+# channels.json: 含上游 API Key
+data/
+
+# ===== 数据库(已迁移走,留着防回归) =====
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== 本地 AI / Trellis 开发辅助目录 =====
+.opencode/
+.trellis/
+AGENTS.md
+
+# ===== 其他 =====
