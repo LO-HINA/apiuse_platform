@@ -310,7 +310,7 @@ textarea:focus {
 table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 980px;
+    min-width: 1120px;
     font-size: 13px;
 }
 
@@ -340,40 +340,38 @@ tbody tr:hover {
     max-width: 260px;
 }
 
-.key-wrap {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.key-wrap .mono {
-    flex: 1;
+.key-cell .mono {
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 13px;
 }
 
-.key-btn {
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted);
+.action-cell {
+    white-space: nowrap;
+}
+
+.action-wrap {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s, color 0.15s;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
-.key-btn:hover {
-    background: var(--bg-sidebar-hover);
-    color: var(--accent);
+.small-action-btn {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
 }
 
-.key-btn.copied {
-    color: var(--green, #35d399);
+.danger-btn {
+    color: var(--red);
+    border-color: #573030;
+}
+
+.danger-btn:hover {
+    background: #2a1a1a;
+    border-color: #7a3a3a;
 }
 
 .status-pill,
@@ -517,6 +515,20 @@ tbody tr:hover {
     min-height: 40px;
     max-height: 120px;
     resize: vertical;
+}
+
+.field-hint {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+.key-edit-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .check-field {

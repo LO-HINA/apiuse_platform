@@ -74,6 +74,7 @@
                                 <th>模型</th>
                                 <th>分组</th>
                                 <th>状态</th>
+                                <th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="channels-tbody"></tbody>
@@ -106,12 +107,25 @@
                         <input id="channel-name" name="name" type="text" placeholder="OpenAI-Pro" autocomplete="off" required>
                     </label>
 
-                    <label class="full-field">
+                    <label class="full-field" id="key-create-field">
                         <span>密钥 <b>*</b></span>
                         <textarea id="channel-key" name="api_key" rows="1" placeholder="sk-..." spellcheck="false" required></textarea>
+                        <em class="field-hint">密钥写入后将无法查看，请妥善保存</em>
                     </label>
 
-                    <label class="check-field">
+                    <div class="full-field key-edit-group" id="key-edit-field" hidden>
+                        <label>
+                            <span>当前密钥（脱敏）</span>
+                            <input id="channel-key-mask" type="text" readonly>
+                        </label>
+                        <label>
+                            <span>修改密钥（可选，留空则不修改）</span>
+                            <input id="channel-new-key" type="text" placeholder="留空则不修改" autocomplete="off">
+                            <em class="field-hint">密钥写入后将无法查看，请妥善保存</em>
+                        </label>
+                    </div>
+
+                    <label class="check-field" id="channel-batch-field">
                         <input id="channel-batch" name="batch" type="checkbox">
                         <span>批量创建</span>
                     </label>

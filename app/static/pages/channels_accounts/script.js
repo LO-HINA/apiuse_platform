@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', function () {
         filter: '',
         modelOptions: defaultModels.slice(),
         redirectMode: 'visual',
+        editingId: null,
+        editingChannel: null,
     };
 
     var el = {
@@ -61,6 +63,12 @@ document.addEventListener('DOMContentLoaded', function () {
         redirectVisual: document.getElementById('redirect-visual'),
         redirectManual: document.getElementById('redirect-manual'),
         addRedirectRowBtn: document.getElementById('add-redirect-row-btn'),
+        modalTitle: document.getElementById('channel-modal-title'),
+        keyCreateField: document.getElementById('key-create-field'),
+        keyEditField: document.getElementById('key-edit-field'),
+        keyMask: document.getElementById('channel-key-mask'),
+        newKey: document.getElementById('channel-new-key'),
+        batchField: document.getElementById('channel-batch-field'),
     };
 
     bindEvents();
@@ -92,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
             state.filter = el.searchInput.value.trim().toLowerCase();
             renderChannels();
         });
-        el.form.addEventListener('submit', createChannel);
+        el.form.addEventListener('submit', submitForm);
 
         document.querySelectorAll('.segment').forEach(function (button) {
             button.addEventListener('click', function () { setRedirectMode(button.dataset.mode); });
@@ -150,8 +158,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function createChannel(event) {
+    async function submitForm(event) {
         event.preventDefault();
+        if (state.editingId) {
+            await updateChannel();
+        } else {
+            await createChannels();
+        }
+    }
+
+    async function createChannels() {
         var payloads = collectPayloads();
         if (!payloads) return;
 
@@ -180,6 +196,98 @@ document.addEventListener('DOMContentLoaded', function () {
         } finally {
             el.submitBtn.disabled = false;
             el.submitBtn.textContent = '确认';
+        }
+    }
+
+    async function updateChannel() {
+        var channel = state.editingChannel;
+        if (!channel || !el.form.reportValidity()) {
+            showNotice('请补齐必填项。', true);
+            return;
+        }
+        var name = el.name.value.trim();
+        var selectedModel = el.model.value.trim();
+        if (!name) { showNotice('请填写名称。', true); el.name.focus(); return; }
+        if (!selectedModel) { showNotice('请填写模型名称。', true); el.model.focus(); return; }
+
+        var modelRedirect;
+        try {
+            modelRedirect = readModelRedirect();
+        } catch (err) {
+            showNotice(err.message, true);
+            return;
+        }
+
+        var payload = {
+            name: name,
+            provider_type: el.group.value,
+            base_url: emptyToNull(el.baseUrl.value),
+            organization: emptyToNull(el.organization.value),
+            models: [selectedModel],
+            custom_model_name: emptyToNull(el.customModel.value),
+            group: el.group.value || 'default',
+            model_redirect: modelRedirect,
+            weight: channel.weight,
+            enabled: channel.enabled,
+        };
+        var newKey = el.newKey.value.trim();
+        if (newKey) payload.api_key = newKey;
+
+        var targetId = state.editingId;
+        el.submitBtn.disabled = true;
+        el.submitBtn.textContent = '提交中';
+        try {
+            await api('/api/admin/channels/' + targetId, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+            });
+            closeModal();
+            showNotice('已更新渠道 ' + targetId + '。');
+            await loadChannels();
+        } catch (err) {
+            showNotice(err.message, true);
+        } finally {
+            el.submitBtn.disabled = false;
+            el.submitBtn.textContent = '确认';
+        }
+    }
+
+    async function deleteChannel(channel) {
+        if (!confirm('确认删除渠道 ' + channel.id + ' (' + channel.name + ') ？此操作不可恢复。')) return;
+        try {
+            showNotice('');
+            await api('/api/admin/channels/' + channel.id, { method: 'DELETE' });
+            showNotice('已删除渠道 ' + channel.id + '。');
+            await loadChannels();
+        } catch (err) {
+            showNotice(err.message, true);
+        }
+    }
+
+    async function exportChannel(channelId) {
+        try {
+            showNotice('');
+            var resp = await fetch('/api/admin/channels/' + channelId + '/export', {
+                headers: { Authorization: 'Bearer ' + token() },
+            });
+            if (!resp.ok) {
+                var data = await resp.json().catch(function () { return null; });
+                var message = (data && data.message) || (data && data.detail) || ('导出失败: ' + resp.status);
+                showNotice(message, true);
+                return;
+            }
+            var blob = await resp.blob();
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = channelId + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showNotice('已导出 ' + channelId + '.json。');
+        } catch (err) {
+            showNotice(err.message, true);
         }
     }
 
@@ -271,13 +379,27 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function openModal() {
+        state.editingId = null;
+        state.editingChannel = null;
         resetForm();
+        setCreateMode();
+        el.modal.hidden = false;
+        requestAnimationFrame(function () { el.name.focus(); });
+    }
+
+    function openEditModal(channel) {
+        state.editingId = channel.id;
+        state.editingChannel = channel;
+        resetForm();
+        setEditMode(channel);
         el.modal.hidden = false;
         requestAnimationFrame(function () { el.name.focus(); });
     }
 
     function closeModal() {
         el.modal.hidden = true;
+        state.editingId = null;
+        state.editingChannel = null;
         resetForm();
     }
 
@@ -291,6 +413,33 @@ document.addEventListener('DOMContentLoaded', function () {
         updateRedirectModeView();
         updateKeyInputMode();
         renderModelOptions();
+        if (el.newKey) el.newKey.value = '';
+    }
+
+    function setCreateMode() {
+        el.modalTitle.textContent = '创建新的渠道';
+        el.keyCreateField.hidden = false;
+        el.keyEditField.hidden = true;
+        el.batchField.hidden = false;
+        el.key.required = true;
+    }
+
+    function setEditMode(channel) {
+        el.modalTitle.textContent = '编辑渠道：' + channel.name;
+        el.keyCreateField.hidden = true;
+        el.keyEditField.hidden = false;
+        el.batchField.hidden = true;
+        el.key.required = false;
+        el.keyMask.value = channel.api_key_masked || '';
+        el.name.value = channel.name || '';
+        el.group.value = channel.provider_type || 'openai_compat';
+        el.organization.value = channel.organization || '';
+        el.baseUrl.value = channel.base_url || '';
+        var models = channel.models || [];
+        el.model.value = models.length ? models[0] : '';
+        el.customModel.value = '';
+        renderRedirectRows(channel.model_redirect || {});
+        updateRedirectModeView();
     }
 
     function updateKeyInputMode() {
@@ -486,7 +635,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var tr = document.createElement('tr');
             var td = document.createElement('td');
             td.className = 'empty-row';
-            td.colSpan = 7;
+            td.colSpan = 8;
             td.textContent = state.channels.length ? '没有匹配的账号。' : '还没有账号，先添加或批量导入。';
             tr.appendChild(td);
             el.tbody.appendChild(tr);
@@ -507,9 +656,39 @@ document.addEventListener('DOMContentLoaded', function () {
             cell(channel.base_url, 'mono'),
             modelCell(channel.models || []),
             groupCell(channel.group || 'default'),
-            statusCell(channel.enabled)
+            statusCell(channel.enabled),
+            actionCell(channel)
         );
         return tr;
+    }
+
+    function actionCell(channel) {
+        var td = document.createElement('td');
+        td.className = 'action-cell';
+        var wrap = document.createElement('div');
+        wrap.className = 'action-wrap';
+
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'ghost-btn small-action-btn';
+        editBtn.textContent = '编辑';
+        editBtn.addEventListener('click', function () { openEditModal(channel); });
+
+        var exportBtn = document.createElement('button');
+        exportBtn.type = 'button';
+        exportBtn.className = 'ghost-btn small-action-btn';
+        exportBtn.textContent = '导出';
+        exportBtn.addEventListener('click', function () { exportChannel(channel.id); });
+
+        var deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'ghost-btn small-action-btn danger-btn';
+        deleteBtn.textContent = '删除';
+        deleteBtn.addEventListener('click', function () { deleteChannel(channel); });
+
+        wrap.append(editBtn, exportBtn, deleteBtn);
+        td.appendChild(wrap);
+        return td;
     }
 
     function cell(text, className) {
@@ -523,43 +702,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function keyCell(channel) {
         var td = document.createElement('td');
         td.className = 'key-cell';
-        var wrap = document.createElement('div');
-        wrap.className = 'key-wrap';
-
         var span = document.createElement('span');
         span.className = 'mono';
         span.textContent = channel.api_key_masked;
-
-        var btn = document.createElement('button');
-        btn.className = 'key-btn';
-        btn.type = 'button';
-        btn.title = '复制密钥';
-        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-
-        var fullKey = '';
-        btn.addEventListener('click', async function () {
-            if (fullKey) {
-                await copy(fullKey, btn);
-                return;
-            }
-            try {
-                var data = await api('/api/admin/channels/' + channel.id + '/key');
-                fullKey = data.key;
-                await copy(fullKey, btn);
-            } catch (e) { /* ignore */ }
-        });
-
-        wrap.append(span, btn);
-        td.appendChild(wrap);
+        td.appendChild(span);
         return td;
-    }
-
-    async function copy(text, btn) {
-        try {
-            await navigator.clipboard.writeText(text);
-            btn.classList.add('copied');
-            setTimeout(function () { btn.classList.remove('copied'); }, 1200);
-        } catch (e) { /* clip not available */ }
     }
 
     function modelCell(models) {
