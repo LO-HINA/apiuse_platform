@@ -4,13 +4,15 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
 import httpx
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api.deps import get_admin_user
 from app.core.config import settings
 from app.core.database import close_db, init_db
 from app.core.exceptions import register_exception_handlers
@@ -31,6 +33,7 @@ from app.modules.chat.schemas import HealthResponse
 from app.modules.relay.router import router as relay_router
 from app.modules.sessions.router import router as sessions_router
 from app.modules.usage.router import router as usage_router
+from app.storage import UserRecord
 
 # 日志要在 app 创建前 setup,启动期日志才会按统一格式输出
 setup_logging()
@@ -133,22 +136,30 @@ async def index():
 
 
 @app.get("/channels", include_in_schema=False)
-async def channels_redirect():
+async def channels_redirect(
+    _admin: Annotated[UserRecord, Depends(get_admin_user)],
+):
     return RedirectResponse(url="/channels/accounts", status_code=302)
 
 
 @app.get("/channels/accounts", include_in_schema=False)
-async def channels_accounts_page():
+async def channels_accounts_page(
+    _admin: Annotated[UserRecord, Depends(get_admin_user)],
+):
     return FileResponse(CHANNELS_ACCOUNTS_FILE)
 
 
 @app.get("/channels/keys", include_in_schema=False)
-async def channels_keys_page():
+async def channels_keys_page(
+    _admin: Annotated[UserRecord, Depends(get_admin_user)],
+):
     return FileResponse(CHANNELS_KEYS_FILE)
 
 
 @app.get("/channels/usage", include_in_schema=False)
-async def channels_usage_page():
+async def channels_usage_page(
+    _admin: Annotated[UserRecord, Depends(get_admin_user)],
+):
     return FileResponse(CHANNELS_USAGE_FILE)
 
 
